@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../../config/firebase.config';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import AdvancedCaptcha from '../../../components/common/AdvancedCaptcha';
-import { ShieldCheck, ArrowRight } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const navigate = useNavigate();
   const { user, role } = useAuth();
+
+  // Password reset states
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Redirect after successful login once role is loaded
   useEffect(() => {
@@ -27,10 +35,40 @@ const Login: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setError(err.message || 'Failed to login');
+      let cleanMessage = err.message || 'Failed to login';
+      if (err.code === 'auth/invalid-credential') {
+        cleanMessage = 'Invalid email or password.';
+      } else if (err.code === 'auth/user-not-found') {
+        cleanMessage = 'No account found with this email.';
+      } else if (err.code === 'auth/wrong-password') {
+        cleanMessage = 'Incorrect password.';
+      }
+      setError(cleanMessage);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    setResetMessage('');
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetMessage('A professional password reset link has been sent to your email. Please check your inbox and spam folder.');
+    } catch (err: any) {
+      let cleanMessage = err.message || 'Failed to send password reset email';
+      if (err.code === 'auth/user-not-found') {
+        cleanMessage = 'No account found with this email.';
+      } else if (err.code === 'auth/invalid-email') {
+        cleanMessage = 'Please enter a valid email address.';
+      }
+      setResetError(cleanMessage);
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -82,64 +120,138 @@ const Login: React.FC = () => {
             {/* Header */}
             <div>
               <h2 className="text-2xl lg:text-3xl font-extrabold text-gray-900 tracking-tight">
-                Welcome Back
+                {isResetMode ? 'Reset Password' : 'Welcome Back'}
               </h2>
               <p className="mt-1.5 text-sm text-gray-500 font-normal">
-                Log in to order fresh meals or customize your subscription.
+                {isResetMode 
+                  ? 'Enter your email to receive a password reset link.' 
+                  : 'Log in to order fresh meals or customize your subscription.'}
               </p>
             </div>
 
-            {/* Error message */}
-            {error && (
-              <div className="p-3.5 bg-red-50 border-l-4 border-red-500 rounded-md text-xs font-medium text-red-700 animate-fadeIn flex items-center gap-2">
-                <span className="flex-shrink-0 text-red-500">⚠️</span>
-                <span>{error}</span>
-              </div>
+            {isResetMode ? (
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                {resetMessage && (
+                  <div className="p-3.5 bg-emerald-50 border-l-4 border-emerald-500 rounded-md text-xs font-medium text-emerald-700 animate-fadeIn">
+                    {resetMessage}
+                  </div>
+                )}
+                {resetError && (
+                  <div className="p-3.5 bg-red-50 border-l-4 border-red-500 rounded-md text-xs font-medium text-red-700 animate-fadeIn flex items-center gap-2">
+                    <span className="flex-shrink-0 text-red-500">⚠️</span>
+                    <span>{resetError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Email Address</label>
+                  <input
+                    type="email"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 outline-none text-sm bg-gray-50/50 focus:bg-white text-gray-900"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="himanshu@gmail.com"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="w-full py-3 rounded-xl transition-all duration-300 font-semibold text-sm bg-primary text-white hover:bg-primary-hover shadow-md hover:shadow-lg cursor-pointer transform active:scale-95 flex items-center justify-center gap-2 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  <span>{resetLoading ? 'Sending link...' : 'Send Reset Link'}</span>
+                  <ArrowRight size={16} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetMode(false);
+                    setResetMessage('');
+                    setResetError('');
+                  }}
+                  className="w-full py-2.5 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-gray-700 transition"
+                >
+                  Back to Login
+                </button>
+              </form>
+            ) : (
+              <>
+                {/* Error message */}
+                {error && (
+                  <div className="p-3.5 bg-red-50 border-l-4 border-red-500 rounded-md text-xs font-medium text-red-700 animate-fadeIn flex items-center gap-2">
+                    <span className="flex-shrink-0 text-red-500">⚠️</span>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {/* Form */}
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Email Address</label>
+                    <input
+                      type="email"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 outline-none text-sm bg-gray-50/50 focus:bg-white text-gray-900"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="himanshu@gmail.com"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Password</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetEmail(email);
+                          setIsResetMode(true);
+                        }}
+                        className="text-xs font-semibold text-primary hover:text-primary-hover hover:underline focus:outline-none"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 outline-none text-sm bg-gray-50/50 focus:bg-white text-gray-900"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors focus:outline-none"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="py-2.5 border-t border-b border-gray-100 my-2">
+                    <AdvancedCaptcha onVerify={setCaptchaVerified} />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!captchaVerified}
+                    className={`w-full py-3 rounded-xl transition-all duration-300 font-semibold text-sm flex items-center justify-center gap-2 ${
+                      captchaVerified
+                        ? 'bg-primary text-white hover:bg-primary-hover shadow-md hover:shadow-lg cursor-pointer transform active:scale-95'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>Login</span>
+                    <ArrowRight size={16} className={captchaVerified ? 'animate-bounce-x' : ''} />
+                  </button>
+                </form>
+              </>
             )}
-
-            {/* Form */}
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Email Address</label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 outline-none text-sm bg-gray-50/50 focus:bg-white text-gray-900"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="himanshu@gmail.com"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Password</label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 outline-none text-sm bg-gray-50/50 focus:bg-white text-gray-900"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <div className="py-2.5 border-t border-b border-gray-100 my-2">
-                <AdvancedCaptcha onVerify={setCaptchaVerified} />
-              </div>
-
-              <button
-                type="submit"
-                disabled={!captchaVerified}
-                className={`w-full py-3 rounded-xl transition-all duration-300 font-semibold text-sm flex items-center justify-center gap-2 ${
-                  captchaVerified
-                    ? 'bg-primary text-white hover:bg-primary-hover shadow-md hover:shadow-lg cursor-pointer transform active:scale-95'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                <span>Login</span>
-                <ArrowRight size={16} className={captchaVerified ? "animate-bounce-x" : ""} />
-              </button>
-            </form>
 
             {/* Footer switch page */}
             <div className="text-center pt-2">
@@ -163,3 +275,4 @@ const Login: React.FC = () => {
 };
 
 export default Login;
+
