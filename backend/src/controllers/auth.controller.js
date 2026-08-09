@@ -77,7 +77,7 @@ class AuthController {
               Authorization: `Bearer ${resendApiKey}`,
               "Content-Type": "application/json",
             },
-            timeout: 5000, // 5 seconds timeout
+            timeout: 10000, // 10 seconds timeout
           });
           console.log(`[sendOtp] Successfully sent OTP via Resend to ${email}`);
           return ResponseUtil.send(res, 200, "Verification code sent to your email.");

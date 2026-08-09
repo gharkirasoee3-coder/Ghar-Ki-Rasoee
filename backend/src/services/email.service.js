@@ -224,6 +224,7 @@ class EmailService {
               Authorization: `Bearer ${resendApiKey}`,
               "Content-Type": "application/json",
             },
+            timeout: 10000, // 10 seconds timeout
           });
           console.log(`Successfully sent payment confirmation email via Resend to ${userEmail}`);
           return true;
