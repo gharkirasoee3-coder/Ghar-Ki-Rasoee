@@ -8,15 +8,21 @@ class AuthController {
   static async sendOtp(req, res) {
     try {
       const { email } = req.body;
+      console.log(`[sendOtp] Start process for: ${email}`);
+
       if (!email) {
+        console.log(`[sendOtp] Error: Email is missing`);
         return ResponseUtil.error(res, 400, "Email is required");
       }
 
       // Check if email already exists in Firebase Auth
       try {
+        console.log(`[sendOtp] Checking if email ${email} exists in Firebase Auth...`);
         await admin.auth().getUserByEmail(email);
+        console.log(`[sendOtp] User exists in Firebase Auth`);
         return ResponseUtil.error(res, 400, "This email is already registered. Please login instead.");
       } catch (err) {
+        console.log(`[sendOtp] Firebase auth check result: ${err.code || err.message}`);
         if (err.code !== 'auth/user-not-found') {
           console.error("Firebase auth check error:", err);
         }
@@ -24,15 +30,20 @@ class AuthController {
 
       // Generate random 6-digit OTP code
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log(`[sendOtp] Generated OTP: ${otp} (Obfuscated in production if needed, logging for debug)`);
 
       // Save OTP to Firestore
+      console.log(`[sendOtp] Saving OTP to Firestore...`);
       await OtpModel.saveOtp(email, otp);
+      console.log(`[sendOtp] OTP saved successfully to Firestore`);
 
       // Read SMTP & Resend credentials directly from process.env at runtime
       const smtpUser = process.env.SMTP_USER;
       const smtpPass = process.env.SMTP_PASS;
       const resendApiKey = process.env.RESEND_API_KEY;
       const fromEmail = process.env.FROM_EMAIL || "Ghar Ki Rasoee <noreply@gharkirasoee.ca>";
+
+      console.log(`[sendOtp] Credentials check: SMTP_USER=${!!smtpUser}, SMTP_PASS=${!!smtpPass}, RESEND_API_KEY=${!!resendApiKey}`);
 
       const htmlContent = `
         <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
@@ -54,6 +65,7 @@ class AuthController {
 
       // 1. Try sending via Resend API (HTTP-based, works on Render Free Tier)
       if (resendApiKey && process.env.NODE_ENV !== "test") {
+        console.log(`[sendOtp] Attempting to send via Resend API (to: ${email})...`);
         try {
           await axios.post("https://api.resend.com/emails", {
             from: fromEmail,
@@ -65,12 +77,13 @@ class AuthController {
               Authorization: `Bearer ${resendApiKey}`,
               "Content-Type": "application/json",
             },
+            timeout: 5000, // 5 seconds timeout
           });
-          console.log(`Successfully sent OTP via Resend to ${email}`);
+          console.log(`[sendOtp] Successfully sent OTP via Resend to ${email}`);
           return ResponseUtil.send(res, 200, "Verification code sent to your email.");
         } catch (resendError) {
           const apiError = resendError.response?.data || resendError.message;
-          console.error("Error sending OTP via Resend API:", apiError);
+          console.error("[sendOtp] Error sending OTP via Resend API:", apiError);
         }
       }
 
@@ -82,6 +95,7 @@ class AuthController {
         return ResponseUtil.send(res, 200, "Verification code sent (logged to console in development).");
       }
 
+      console.log(`[sendOtp] Falling back to Gmail SMTP on Port 587 (family: 4)...`);
       const nodemailer = require("nodemailer");
       const transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
@@ -91,6 +105,9 @@ class AuthController {
           user: smtpUser,
           pass: smtpPass,
         },
+        connectionTimeout: 5000, // 5 seconds timeout to prevent hanging forever
+        greetingTimeout: 5000,
+        socketTimeout: 5000,
         family: 4, // Force IPv4 to prevent IPv6 ENETUNREACH timeouts on Render
       });
 
@@ -101,11 +118,13 @@ class AuthController {
         html: htmlContent,
       };
 
+      console.log(`[sendOtp] Sending email via transporter.sendMail...`);
       await transporter.sendMail(mailOptions);
+      console.log(`[sendOtp] Successfully sent OTP via SMTP to ${email}`);
       return ResponseUtil.send(res, 200, "Verification code sent to your email.");
     } catch (error) {
-      console.error("Error sending OTP:", error);
-      return ResponseUtil.error(res, 500, "Failed to send verification code.", error);
+      console.error("[sendOtp] Critical error caught in sendOtp:", error);
+      return ResponseUtil.error(res, 500, "Failed to send verification code.", error.message);
     }
   }
 
