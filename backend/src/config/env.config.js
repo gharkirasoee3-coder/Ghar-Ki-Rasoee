@@ -15,7 +15,9 @@ module.exports = {
     WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   },
   BASE_URL: process.env.BASE_URL,
-  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5173",
+  CLIENT_URL: (process.env.CLIENT_URL || "http://localhost:5173")
+    .split(",")
+    .map((url) => url.trim().replace(/\/$/, "")),
   SMTP: {
     USER: process.env.SMTP_USER,
     PASS: process.env.SMTP_PASS,
