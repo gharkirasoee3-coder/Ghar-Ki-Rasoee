@@ -49,7 +49,10 @@ if (!isConfigured) {
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId: env.FIREBASE.PROJECT_ID,
-          privateKey: env.FIREBASE.PRIVATE_KEY?.replace(/\\n/g, "\n"),
+          privateKey: env.FIREBASE.PRIVATE_KEY
+            ?.trim()
+            ?.replace(/^["']|["']$/g, "")
+            ?.replace(/\\n/g, "\n"),
           clientEmail: env.FIREBASE.CLIENT_EMAIL,
         }),
       });
