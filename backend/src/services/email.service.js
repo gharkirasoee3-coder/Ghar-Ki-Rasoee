@@ -223,11 +223,14 @@ class EmailService {
       }
 
       const transporter = nodemailer.createTransport({
-        service: "gmail",
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
         auth: {
           user: smtpUser,
           pass: smtpPass,
         },
+        family: 4, // Force IPv4 to prevent IPv6 ENETUNREACH timeouts on Render
       });
 
       const mailOptions = {
