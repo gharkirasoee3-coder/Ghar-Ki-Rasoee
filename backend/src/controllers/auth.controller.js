@@ -2,6 +2,7 @@ const UserModel = require("../models/user.model");
 const OtpModel = require("../models/otp.model");
 const admin = require("../config/firebase.config");
 const ResponseUtil = require("../utils/response.util");
+const axios = require("axios");
 
 class AuthController {
   static async sendOtp(req, res) {
@@ -27,11 +28,53 @@ class AuthController {
       // Save OTP to Firestore
       await OtpModel.saveOtp(email, otp);
 
-      // Read SMTP credentials directly from process.env at runtime
+      // Read SMTP & Resend credentials directly from process.env at runtime
       const smtpUser = process.env.SMTP_USER;
       const smtpPass = process.env.SMTP_PASS;
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const fromEmail = process.env.FROM_EMAIL || "Ghar Ki Rasoee <noreply@gharkirasoee.ca>";
 
-      // Fallback if SMTP password is not set
+      const htmlContent = `
+        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
+          <h2 style="color: #CB202D; text-align: center; font-size: 24px; margin-bottom: 5px;">Ghar Ki Rasoee</h2>
+          <p style="text-align: center; color: #696969; font-size: 14px; margin-top: 0;">Fresh Homemade Meals</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="color: #1c1c1c; font-size: 15px;">Hello,</p>
+          <p style="color: #1c1c1c; font-size: 15px; line-height: 1.5;">Thank you for choosing <strong>Ghar Ki Rasoee</strong>. Please use the verification code below to verify your email address and complete your signup:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #CB202D; background-color: #f9fafb; padding: 12px 24px; border-radius: 8px; border: 1px solid #e5e7eb; display: inline-block;">
+              ${otp}
+            </span>
+          </div>
+          <p style="font-size: 13px; color: #696969; line-height: 1.4;">This code is valid for <strong>10 minutes</strong>. If you did not request this code, you can safely ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="font-size: 11px; color: #a1a1a1; text-align: center; margin: 0;">© 2026 Ghar Ki Rasoee. All rights reserved.</p>
+        </div>
+      `;
+
+      // 1. Try sending via Resend API (HTTP-based, works on Render Free Tier)
+      if (resendApiKey && process.env.NODE_ENV !== "test") {
+        try {
+          await axios.post("https://api.resend.com/emails", {
+            from: fromEmail,
+            to: [email],
+            subject: `${otp} is your Ghar Ki Rasoee Verification Code`,
+            html: htmlContent,
+          }, {
+            headers: {
+              Authorization: `Bearer ${resendApiKey}`,
+              "Content-Type": "application/json",
+            },
+          });
+          console.log(`Successfully sent OTP via Resend to ${email}`);
+          return ResponseUtil.send(res, 200, "Verification code sent to your email.");
+        } catch (resendError) {
+          const apiError = resendError.response?.data || resendError.message;
+          console.error("Error sending OTP via Resend API:", apiError);
+        }
+      }
+
+      // 2. Fallback to Gmail SMTP
       if (!smtpPass) {
         console.log("\n-----------------------------------------");
         console.log(`[DEV OTP BYPASS] Verification Code for ${email}: ${otp}`);
@@ -55,23 +98,7 @@ class AuthController {
         from: `"Ghar Ki Rasoee" <${smtpUser}>`,
         to: email,
         subject: `${otp} is your Ghar Ki Rasoee Verification Code`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
-            <h2 style="color: #CB202D; text-align: center; font-size: 24px; margin-bottom: 5px;">Ghar Ki Rasoee</h2>
-            <p style="text-align: center; color: #696969; font-size: 14px; margin-top: 0;">Fresh Homemade Meals</p>
-            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="color: #1c1c1c; font-size: 15px;">Hello,</p>
-            <p style="color: #1c1c1c; font-size: 15px; line-height: 1.5;">Thank you for choosing <strong>Ghar Ki Rasoee</strong>. Please use the verification code below to verify your email address and complete your signup:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #CB202D; background-color: #f9fafb; padding: 12px 24px; border-radius: 8px; border: 1px solid #e5e7eb; display: inline-block;">
-                ${otp}
-              </span>
-            </div>
-            <p style="font-size: 13px; color: #696969; line-height: 1.4;">This code is valid for <strong>10 minutes</strong>. If you did not request this code, you can safely ignore this email.</p>
-            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="font-size: 11px; color: #a1a1a1; text-align: center; margin: 0;">© 2026 Ghar Ki Rasoee. All rights reserved.</p>
-          </div>
-        `,
+        html: htmlContent,
       };
 
       await transporter.sendMail(mailOptions);

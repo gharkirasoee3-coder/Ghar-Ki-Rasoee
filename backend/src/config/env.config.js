@@ -22,6 +22,8 @@ module.exports = {
     USER: process.env.SMTP_USER,
     PASS: process.env.SMTP_PASS,
   },
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+  FROM_EMAIL: process.env.FROM_EMAIL || "Ghar Ki Rasoee <noreply@gharkirasoee.ca>",
   CLOUDINARY: {
     CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
     API_KEY: process.env.CLOUDINARY_API_KEY,

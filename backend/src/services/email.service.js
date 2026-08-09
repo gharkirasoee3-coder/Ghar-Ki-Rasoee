@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const config = require("../config/env.config");
+const axios = require("axios");
 
 class EmailService {
   /**
@@ -204,11 +205,35 @@ class EmailService {
 </html>
       `;
 
-      // Read SMTP credentials directly from process.env at runtime
+      // Read SMTP & Resend credentials directly from process.env at runtime
       const smtpUser = config.SMTP.USER;
       const smtpPass = config.SMTP.PASS;
+      const resendApiKey = config.RESEND_API_KEY;
+      const fromEmail = config.FROM_EMAIL || "Ghar Ki Rasoee <noreply@gharkirasoee.ca>";
 
-      // Fallback if SMTP password is not set
+      // 1. Try sending via Resend API (HTTP-based, works on Render Free Tier)
+      if (resendApiKey && process.env.NODE_ENV !== "test") {
+        try {
+          await axios.post("https://api.resend.com/emails", {
+            from: fromEmail,
+            to: [userEmail],
+            subject: `Payment Confirmed - $${formattedAmount} CAD - Ghar Ki Rasoee`,
+            html: htmlContent,
+          }, {
+            headers: {
+              Authorization: `Bearer ${resendApiKey}`,
+              "Content-Type": "application/json",
+            },
+          });
+          console.log(`Successfully sent payment confirmation email via Resend to ${userEmail}`);
+          return true;
+        } catch (resendError) {
+          const apiError = resendError.response?.data || resendError.message;
+          console.error("Error sending payment confirmation email via Resend API:", apiError);
+        }
+      }
+
+      // 2. Fallback if SMTP password is not set
       if (!smtpPass) {
         console.log("\n=======================================================");
         console.log(`[DEV EMAIL BYPASS] Payment Confirmation for ${userEmail}`);
