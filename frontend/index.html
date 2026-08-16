@@ -7,7 +7,145 @@
     <title>Ghar Ki Rasoee</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          background: #fdf2f2;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        .gkr-loader-wrapper {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: radial-gradient(circle at center, #ffffff 0%, #fef2f2 100%);
+          z-index: 9999;
+        }
+        .gkr-logo-ring {
+          position: relative;
+          width: 110px;
+          height: 110px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 24px;
+        }
+        .gkr-ring-inner {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          border: 4px solid transparent;
+          border-top-color: #CB202D;
+          border-right-color: #CB202D;
+          border-radius: 50%;
+          animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        .gkr-ring-outer {
+          position: absolute;
+          width: 120%;
+          height: 120%;
+          border: 2px dashed #fecaca;
+          border-radius: 50%;
+          animation: spin-reverse 8s linear infinite;
+        }
+        .gkr-logo-center {
+          width: 66px;
+          height: 66px;
+          background: #CB202D;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 10px 25px rgba(203, 32, 45, 0.4);
+          animation: pulse 1.8s ease-in-out infinite;
+        }
+        .gkr-brand-title {
+          font-size: 32px;
+          font-weight: 900;
+          color: #111827;
+          margin: 0;
+          letter-spacing: -0.8px;
+          text-align: center;
+          background: linear-gradient(to right, #CB202D, #ff5722, #CB202D);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: text-shimmer 2.5s linear infinite;
+        }
+        .gkr-brand-subtitle {
+          font-size: 11px;
+          font-weight: 800;
+          color: #9ca3af;
+          text-transform: uppercase;
+          letter-spacing: 2.5px;
+          margin-top: 6px;
+          margin-bottom: 28px;
+          text-align: center;
+        }
+        .gkr-progress-track {
+          width: 140px;
+          height: 4px;
+          background: #fee2e2;
+          border-radius: 999px;
+          overflow: hidden;
+          position: relative;
+        }
+        .gkr-progress-bar {
+          width: 60%;
+          height: 100%;
+          background: linear-gradient(to right, #CB202D, #ff5722);
+          border-radius: 999px;
+          position: absolute;
+          animation: loading-progress 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes spin-reverse {
+          0% { transform: rotate(360deg); }
+          100% { transform: rotate(0deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 10px 25px rgba(203, 32, 45, 0.4); }
+          50% { transform: scale(1.08); box-shadow: 0 15px 35px rgba(203, 32, 45, 0.6); }
+        }
+        @keyframes text-shimmer {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes loading-progress {
+          0% { left: -60%; width: 30%; }
+          50% { left: 30%; width: 60%; }
+          100% { left: 110%; width: 30%; }
+        }
+      </style>
+      <div class="gkr-loader-wrapper">
+        <div class="gkr-logo-ring">
+          <div class="gkr-ring-outer"></div>
+          <div class="gkr-ring-inner"></div>
+          <div class="gkr-logo-center">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v3M8 4v2M16 4v2" />
+              <path d="M3 12h18" />
+              <path d="M19 12a7 7 0 0 1-14 0" />
+            </svg>
+          </div>
+        </div>
+        <h2 class="gkr-brand-title">Ghar Ki Rasoee</h2>
+        <div class="gkr-brand-subtitle">Fresh Homemade Meals</div>
+        <div class="gkr-progress-track">
+          <div class="gkr-progress-bar"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

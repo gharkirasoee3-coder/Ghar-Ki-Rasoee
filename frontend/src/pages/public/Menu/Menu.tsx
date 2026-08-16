@@ -10,7 +10,7 @@ import { CANADIAN_CITIES, SPECIFIC_CITIES, POPULAR_CITIES as popularCities } fro
 
 const Menu: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { selectedCity, selectCity, clearCity } = useCity();
+  const { selectedCity, selectCity } = useCity();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [menuImages, setMenuImages] = useState<{ vancouver: string; others: string }>({
@@ -48,10 +48,6 @@ const Menu: React.FC = () => {
     selectCity(city);
     setSearchQuery('');
     setShowDropdown(false);
-  };
-
-  const handleClearSelection = () => {
-    clearCity();
   };
 
   // Filter cities based on search
