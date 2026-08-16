@@ -229,12 +229,14 @@ class PaymentController {
           // Fetch user details for payment confirmation email
           const userDoc = await db.collection("users").doc(userId).get();
           const userData = userDoc.exists ? userDoc.data() : {};
+          const userEmail = userData.email || session.customer_details?.email || session.customer_email;
+          const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
 
           // Send payment confirmation email
           const EmailService = require("../services/email.service");
           await EmailService.sendPaymentConfirmationEmail({
-            userEmail: userData.email,
-            userName: userData.name || userData.displayName || userData.email?.split("@")[0],
+            userEmail,
+            userName,
             amount: session.amount_total / 100,
             paymentMethod: "Stripe (Credit/Debit Card)",
             paymentType: "subscription",
@@ -315,11 +317,14 @@ class PaymentController {
             updatedAt: new Date().toISOString(),
           });
 
+          const userEmail = userData.email || session.customer_details?.email || session.customer_email;
+          const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
+
           // Send payment confirmation email
           const EmailService = require("../services/email.service");
           await EmailService.sendPaymentConfirmationEmail({
-            userEmail: userData.email,
-            userName: userData.name || userData.displayName || userData.email?.split("@")[0],
+            userEmail,
+            userName,
             amount: session.amount_total / 100,
             paymentMethod: "Stripe (Credit/Debit Card)",
             paymentType: "one-time",
@@ -396,11 +401,13 @@ class PaymentController {
             const userDoc = await db.collection("users").doc(latestSub.userId).get();
             const userData = userDoc.exists ? userDoc.data() : {};
             const amountPaid = invoice.amount_paid ? (invoice.amount_paid / 100) : (latestSub.planDetails?.price || latestSub.price || 0);
+            const userEmail = userData.email || invoice.customer_email || latestSub.userEmail;
+            const userName = userData.name || userData.displayName || invoice.customer_name || userEmail?.split("@")[0] || "Customer";
 
             const EmailService = require("../services/email.service");
             await EmailService.sendPaymentConfirmationEmail({
-              userEmail: userData.email,
-              userName: userData.name || userData.displayName || userData.email?.split("@")[0],
+              userEmail,
+              userName,
               amount: amountPaid,
               paymentMethod: "Stripe (Credit/Debit Card)",
               paymentType: "renewal",

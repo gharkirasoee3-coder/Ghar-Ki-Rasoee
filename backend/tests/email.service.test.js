@@ -1,6 +1,11 @@
 const nodemailer = require("nodemailer");
 const config = require("../src/config/env.config");
 
+// Setup axios mock
+jest.mock("axios", () => ({
+  post: jest.fn(),
+}));
+
 // Setup nodemailer mock
 jest.mock("nodemailer", () => {
   const sendMailMock = jest.fn().mockImplementation((options, callback) => {
@@ -343,6 +348,72 @@ describe("EmailService", () => {
         details: "invalid-type-string"
       });
       expect(result).toBe(true);
+    });
+
+    it("should send email via Resend API when RESEND_API_KEY is configured", async () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalFrom = config.FROM_EMAIL;
+      process.env.NODE_ENV = "production";
+      config.RESEND_API_KEY = "mock-key";
+      config.FROM_EMAIL = "Ghar Ki Rasoee <noreply@gharkirasoee.ca>";
+      
+      const axios = require("axios");
+      axios.post.mockResolvedValueOnce({ data: { id: "resend-id" } });
+
+      const result = await EmailService.sendPaymentConfirmationEmail({
+        userEmail: "customer@example.com",
+        userName: "Himanshu",
+        amount: 220,
+        paymentMethod: "Stripe",
+        paymentType: "subscription",
+        details: subscriptionDetails,
+        deliveryAddress: "68 Albion Avenue",
+        transactionId: "sub-123"
+      });
+
+      expect(result).toBe(true);
+      expect(axios.post).toHaveBeenCalledWith(
+        "https://api.resend.com/emails",
+        expect.any(Object),
+        expect.any(Object)
+      );
+
+      config.FROM_EMAIL = originalFrom;
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it("should handle error when Resend API fails and fall back", async () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalFrom = config.FROM_EMAIL;
+      process.env.NODE_ENV = "production";
+      config.RESEND_API_KEY = "mock-key";
+      config.FROM_EMAIL = "";
+      
+      const axios = require("axios");
+      axios.post.mockRejectedValueOnce(new Error("Resend API rate limit"));
+
+      // Set SMTP password to empty to trigger console.log bypass fallback
+      config.SMTP.PASS = "";
+
+      const result = await EmailService.sendPaymentConfirmationEmail({
+        userEmail: "customer@example.com",
+        userName: "Himanshu",
+        amount: 220,
+        paymentMethod: "Stripe",
+        paymentType: "subscription",
+        details: subscriptionDetails,
+        deliveryAddress: "68 Albion Avenue",
+        transactionId: "sub-123"
+      });
+
+      expect(result).toBe(true);
+      expect(spyConsoleError).toHaveBeenCalledWith(
+        "Error sending payment confirmation email via Resend API:",
+        "Resend API rate limit"
+      );
+
+      config.FROM_EMAIL = originalFrom;
+      process.env.NODE_ENV = originalEnv;
     });
   });
 });

@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>192/192</span>
+                <span class='fraction'>198/198</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>136/136</span>
+                <span class='fraction'>151/151</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>190/190</span>
+                <span class='fraction'>196/196</span>
             </div>
         
             
@@ -552,7 +552,14 @@
 <a name='L487'></a><a href='#L487'>487</a>
 <a name='L488'></a><a href='#L488'>488</a>
 <a name='L489'></a><a href='#L489'>489</a>
-<a name='L490'></a><a href='#L490'>490</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -783,6 +790,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
@@ -868,6 +877,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
@@ -947,6 +959,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -1272,12 +1286,14 @@ class PaymentController {
           // Fetch user details for payment confirmation email
           const userDoc = await db.collection("users").doc(userId).get();
           const userData = userDoc.exists ? userDoc.data() : {};
+          const userEmail = userData.email || session.customer_details?.email || session.customer_email;
+          const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
 &nbsp;
           // Send payment confirmation email
           const EmailService = require("../services/email.service");
           await EmailService.sendPaymentConfirmationEmail({
-            userEmail: userData.email,
-            userName: userData.name || userData.displayName || userData.email?.split("@")[0],
+            userEmail,
+            userName,
             amount: session.amount_total / 100,
             paymentMethod: "Stripe (Credit/Debit Card)",
             paymentType: "subscription",
@@ -1358,11 +1374,14 @@ class PaymentController {
             updatedAt: new Date().toISOString(),
           });
 &nbsp;
+          const userEmail = userData.email || session.customer_details?.email || session.customer_email;
+          const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
+&nbsp;
           // Send payment confirmation email
           const EmailService = require("../services/email.service");
           await EmailService.sendPaymentConfirmationEmail({
-            userEmail: userData.email,
-            userName: userData.name || userData.displayName || userData.email?.split("@")[0],
+            userEmail,
+            userName,
             amount: session.amount_total / 100,
             paymentMethod: "Stripe (Credit/Debit Card)",
             paymentType: "one-time",
@@ -1439,11 +1458,13 @@ class PaymentController {
             const userDoc = await db.collection("users").doc(latestSub.userId).get();
             const userData = userDoc.exists ? userDoc.data() : {};
             const amountPaid = invoice.amount_paid ? (invoice.amount_paid / 100) : (latestSub.planDetails?.price || latestSub.price || 0);
+            const userEmail = userData.email || invoice.customer_email || latestSub.userEmail;
+            const userName = userData.name || userData.displayName || invoice.customer_name || userEmail?.split("@")[0] || "Customer";
 &nbsp;
             const EmailService = require("../services/email.service");
             await EmailService.sendPaymentConfirmationEmail({
-              userEmail: userData.email,
-              userName: userData.name || userData.displayName || userData.email?.split("@")[0],
+              userEmail,
+              userName,
               amount: amountPaid,
               paymentMethod: "Stripe (Credit/Debit Card)",
               paymentType: "renewal",
@@ -1537,7 +1558,7 @@ module.exports = PaymentController;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-08-02T09:10:18.525Z
+                at 2026-08-16T07:12:44.771Z
             </div>
         <script src="../prettify.js"></script>
         <script>

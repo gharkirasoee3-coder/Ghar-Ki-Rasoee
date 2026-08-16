@@ -5,30 +5,12 @@ import PageContainer from '../../../components/layout/PageContainer';
 import { Search, MapPin, X, Download, ExternalLink, ArrowRight, Info } from 'lucide-react';
 import { ENV } from '../../../config/env.config';
 
-const CANADIAN_CITIES = [
-  "Toronto", "Montreal", "Vancouver", "Calgary", "Edmonton", "Ottawa", "Winnipeg", 
-  "Quebec City", "Hamilton", "Kitchener", "London", "Victoria", "Halifax", 
-  "Oshawa", "Windsor", "Saskatoon", "Regina", "Barrie", "St. John's", "Abbotsford", 
-  "Kelowna", "Sherbrooke", "Trois-Rivieres", "Kingston", "Milton", "Moncton", 
-  "Saint John", "Red Deer", "Lethbridge", "Kamloops", "Nanaimo", "Chilliwack", 
-  "Burnaby", "Richmond", "New Westminster", "Langley", "Surrey", "Coquitlam", 
-  "Delta", "North Vancouver", "West Vancouver", "Port Coquitlam", "Port Moody", 
-  "Maple Ridge", "White Rock", "Brampton", "Mississauga", "Vaughan", "Markham", 
-  "Oakville", "Richmond Hill", "Burlington", "Guelph", "Cambridge", "Waterloo", 
-  "Sudbury", "Thunder Bay", "Peterborough", "Sarnia", "Belleville", "Sault Ste. Marie", 
-  "North Bay", "Cornwall", "Grande Prairie", "Fort McMurray", "Medicine Hat", 
-  "Airdrie", "Spruce Grove", "Leduc", "St. Albert", "Brandon", "Portage la Prairie", 
-  "Fredericton", "Miramichi", "Cape Breton", "Sydney", "Charlottetown", "Summerside", 
-  "Yellowknife", "Whitehorse", "Iqaluit"
-].sort();
-
-const SPECIFIC_CITIES = ['vancouver', 'burnaby', 'richmond', 'new westminster', 'langley'];
+import { useCity } from '../../../context/CityContext';
+import { CANADIAN_CITIES, SPECIFIC_CITIES, POPULAR_CITIES as popularCities } from '../../../config/city.config';
 
 const Menu: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCity, setSelectedCity] = useState<string | null>(() => {
-    return localStorage.getItem('gkr_selected_city') || null;
-  });
+  const { selectedCity, selectCity, clearCity } = useCity();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [menuImages, setMenuImages] = useState<{ vancouver: string; others: string }>({
@@ -63,15 +45,13 @@ const Menu: React.FC = () => {
   }, []);
 
   const handleSelectCity = (city: string) => {
-    setSelectedCity(city);
-    localStorage.setItem('gkr_selected_city', city);
+    selectCity(city);
     setSearchQuery('');
     setShowDropdown(false);
   };
 
   const handleClearSelection = () => {
-    setSelectedCity(null);
-    localStorage.removeItem('gkr_selected_city');
+    clearCity();
   };
 
   // Filter cities based on search
@@ -104,8 +84,6 @@ const Menu: React.FC = () => {
     ? getMenuImageName(menuImages.vancouver, 'For-Vancouver-Burnaby-Richmond-New-Westminster-Langley.jpeg')
     : getMenuImageName(menuImages.others, 'remaining-city.jpeg');
 
-  // Popular cities for quick selection
-  const popularCities = ['Vancouver', 'Burnaby', 'Richmond', 'New Westminster', 'Langley', 'Surrey', 'Toronto', 'Calgary'];
 
   return (
     <div className="bg-gray-50 min-h-screen pb-16">
@@ -237,12 +215,12 @@ const Menu: React.FC = () => {
                     </h3>
                   </div>
                 </div>
-                <button
+                {/* <button
                   onClick={handleClearSelection}
                   className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-text-primary rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm flex items-center gap-2"
                 >
                   Change City
-                </button>
+                </button> */}
               </div>
             )}
           </div>
