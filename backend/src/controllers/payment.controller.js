@@ -133,6 +133,11 @@ class PaymentController {
 
       const session = await StripeService.retrieveSession(sessionId);
 
+      // Fallback: Fulfill session synchronously if paid, to ensure DB matches Stripe state before redirect
+      if (session.payment_status === "paid") {
+        await PaymentController.fulfillCheckoutSession(session);
+      }
+
       return ResponseUtil.send(res, 200, "Session retrieved successfully", {
         status: session.payment_status,
         customerEmail: session.customer_details?.email,
@@ -143,6 +148,227 @@ class PaymentController {
       console.error("Error retrieving session status:", error);
       return ResponseUtil.error(res, 500, "Failed to retrieve session status", error);
     }
+  }
+
+  /**
+   * Helper to fulfill a successful Stripe Checkout Session (subscription or one-time)
+   * This is idempotent and can be safely called by webhook or success page.
+   */
+  static async fulfillCheckoutSession(session) {
+    const { userId, type, planName, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan } = session.metadata;
+
+    console.log(`Fulfilling successful checkout session ${session.id} for user ${userId}, type ${type}`);
+
+    if (type === "subscription") {
+      // Idempotency: Check if subscription with this session ID already exists
+      const duplicateCheck = await SubscriptionModel.collection
+        .where("stripeSessionId", "==", session.id)
+        .limit(1)
+        .get();
+
+      if (!duplicateCheck.empty) {
+        console.log(`Subscription already fulfilled for session ${session.id}. Skipping.`);
+        return { success: true, alreadyProcessed: true };
+      }
+
+      // Check if user already has an active subscription to mark it as replaced (only if replacePlan !== "false")
+      if (replacePlan !== "false") {
+        const existing = await SubscriptionModel.getUserSubscription(userId);
+        if (existing) {
+          await SubscriptionModel.collection.doc(existing.subscriptionId).update({
+            status: "Renewed",
+            updatedAt: new Date().toISOString(),
+          });
+
+          // Cancel the recurring billing on Stripe for the old subscription to avoid double-charging
+          if (existing.stripeSubscriptionId) {
+            await StripeService.cancelSubscription(existing.stripeSubscriptionId).catch((err) =>
+              console.error("Failed to cancel old Stripe subscription billing via webhook:", err)
+            );
+          }
+        }
+      }
+
+      const parsedCustomDetails = customDetails ? JSON.parse(customDetails) : null;
+
+      const planData = {
+        plan: planName,
+        planDetails: { 
+          name: planName, 
+          price: session.amount_total / 100,
+          ...(parsedCustomDetails ? { custom: true, ...parsedCustomDetails } : {})
+        },
+        duration: 30, // 30 days
+        deliveryAddress,
+        paymentMethod: "Stripe",
+        paymentStatus: "Paid",
+        stripeSessionId: session.id,
+        stripeSubscriptionId: session.subscription || null,
+        couponCode: couponCode || null,
+        isRecurring: isRecurring === "true",
+      };
+
+      const newSub = await SubscriptionModel.createSubscription(userId, planData);
+
+      // Update user address
+      await db.collection("users").doc(userId).update({
+        address: deliveryAddress,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Fetch user details for payment confirmation email
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      const userEmail = userData.email || session.customer_details?.email || session.customer_email;
+      const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
+
+      // Send payment confirmation email
+      const EmailService = require("../services/email.service");
+      await EmailService.sendPaymentConfirmationEmail({
+        userEmail,
+        userName,
+        amount: session.amount_total / 100,
+        paymentMethod: "Stripe (Credit/Debit Card)",
+        paymentType: "subscription",
+        details: newSub,
+        deliveryAddress,
+        transactionId: newSub.subscriptionId
+      }).catch(err => console.error("Failed to send subscription payment confirmation email:", err));
+
+      // Log activity
+      await ActivityModel.logActivity(userId, {
+        type: "subscription",
+        action: "created",
+        description: `Subscribed to ${planName} Plan via Stripe (CAD)${couponCode ? ` with coupon ${couponCode}` : ''}`,
+        metadata: {
+          plan: planName,
+          subscriptionId: newSub.subscriptionId,
+          couponCode: couponCode || null,
+        },
+      });
+
+      await NotificationModel.create(userId, {
+        type: "payment",
+        title: "Payment Confirmed",
+        message: `Your payment of $${(session.amount_total / 100).toFixed(2)} CAD for the ${planName} subscription plan has been confirmed.`,
+        metadata: { subscriptionId: newSub.subscriptionId, amount: session.amount_total / 100 }
+      }).catch(err => console.error("Failed to create subscription payment notification:", err));
+
+      // Invalidate cache
+      cache.delete(`user_subscription_${userId}`);
+      cache.delete(`user_subscriptions_${userId}`);
+      cache.delete("admin_dashboard_stats");
+      cache.delete("admin_all_subscriptions");
+      cache.delete("admin_today_deliveries");
+      cache.delete("admin_all_users");
+
+      // Increment coupon usage count
+      if (couponCode) {
+        const CouponModel = require("../models/coupon.model");
+        await CouponModel.incrementUsage(couponCode).catch((err) =>
+          console.error("Failed to increment coupon usage count:", err)
+        );
+      }
+
+      return { success: true, subscription: newSub };
+    } else if (type === "one-time") {
+      // Idempotency: Check if order with this session ID already exists
+      const duplicateCheck = await OrderModel.collection
+        .where("stripeSessionId", "==", session.id)
+        .limit(1)
+        .get();
+
+      if (!duplicateCheck.empty) {
+        console.log(`Order already fulfilled for session ${session.id}. Skipping.`);
+        return { success: true, alreadyProcessed: true };
+      }
+
+      // Create order in Firestore
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+
+      let parsedItems = [];
+      try {
+        parsedItems = JSON.parse(items || "[]");
+      } catch (e) {
+        console.error("Failed to parse items from metadata:", e);
+      }
+
+      const orderData = {
+        userId,
+        customerName: userData.displayName || userData.email || "Unknown Customer",
+        deliveryAddress,
+        orderType: "one-time",
+        plan: null,
+        items: parsedItems,
+        price: session.amount_total / 100,
+        deliveryDate,
+        paymentMethod: "Stripe",
+        paymentStatus: "Paid",
+        stripeSessionId: session.id,
+        couponCode: couponCode || null,
+      };
+
+      const newOrder = await OrderModel.createOrder(orderData);
+
+      // Update user address
+      await db.collection("users").doc(userId).update({
+        address: deliveryAddress,
+        updatedAt: new Date().toISOString(),
+      });
+
+      const userEmail = userData.email || session.customer_details?.email || session.customer_email;
+      const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
+
+      // Send payment confirmation email
+      const EmailService = require("../services/email.service");
+      await EmailService.sendPaymentConfirmationEmail({
+        userEmail,
+        userName,
+        amount: session.amount_total / 100,
+        paymentMethod: "Stripe (Credit/Debit Card)",
+        paymentType: "one-time",
+        details: parsedItems,
+        deliveryAddress,
+        transactionId: newOrder.orderId
+      }).catch(err => console.error("Failed to send order payment confirmation email:", err));
+
+      // Log activity
+      await ActivityModel.logActivity(userId, {
+        type: "order",
+        action: "placed",
+        description: `Placed one-time meal order via Stripe (CAD)${couponCode ? ` with coupon ${couponCode}` : ''}`,
+        metadata: {
+          orderId: newOrder.orderId,
+          orderType: "one-time",
+          totalItems: parsedItems.length,
+          couponCode: couponCode || null,
+        },
+      });
+
+      await NotificationModel.create(userId, {
+        type: "payment",
+        title: "Payment Confirmed",
+        message: `Your payment of $${(session.amount_total / 100).toFixed(2)} CAD for order #${newOrder.orderId.slice(0, 8)} has been confirmed.`,
+        metadata: { orderId: newOrder.orderId, amount: session.amount_total / 100 }
+      }).catch(err => console.error("Failed to create order payment notification:", err));
+
+      // Invalidate cache
+      cache.delete("admin_dashboard_stats");
+      cache.delete("admin_today_deliveries");
+
+      // Increment coupon usage count
+      if (couponCode) {
+        const CouponModel = require("../models/coupon.model");
+        await CouponModel.incrementUsage(couponCode).catch((err) =>
+          console.error("Failed to increment coupon usage count:", err)
+        );
+      }
+
+      return { success: true, order: newOrder };
+    }
+
+    return { success: false, reason: "unrecognized type" };
   }
 
   /**
@@ -165,206 +391,7 @@ class PaymentController {
     try {
       if (event.type === "checkout.session.completed") {
         const session = event.data.object;
-        const { userId, type, planName, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan } = session.metadata;
-
-        console.log(`Processing successful payment for user ${userId}, type ${type}`);
-
-        if (type === "subscription") {
-          // Idempotency: Check if subscription with this session ID already exists
-          const duplicateCheck = await SubscriptionModel.collection
-            .where("stripeSessionId", "==", session.id)
-            .limit(1)
-            .get();
-
-          if (!duplicateCheck.empty) {
-            console.log(`Webhook already processed for session ${session.id}. Skipping.`);
-            return res.json({ received: true });
-          }
-
-          // Check if user already has an active subscription to mark it as replaced (only if replacePlan !== "false")
-          if (replacePlan !== "false") {
-            const existing = await SubscriptionModel.getUserSubscription(userId);
-            if (existing) {
-              await SubscriptionModel.collection.doc(existing.subscriptionId).update({
-                status: "Renewed",
-                updatedAt: new Date().toISOString(),
-              });
-
-              // Cancel the recurring billing on Stripe for the old subscription to avoid double-charging
-              if (existing.stripeSubscriptionId) {
-                await StripeService.cancelSubscription(existing.stripeSubscriptionId).catch((err) =>
-                  console.error("Failed to cancel old Stripe subscription billing via webhook:", err)
-                );
-              }
-            }
-          }
-
-          const parsedCustomDetails = customDetails ? JSON.parse(customDetails) : null;
-
-          const planData = {
-            plan: planName,
-            planDetails: { 
-              name: planName, 
-              price: session.amount_total / 100,
-              ...(parsedCustomDetails ? { custom: true, ...parsedCustomDetails } : {})
-            },
-            duration: 30, // 30 days
-            deliveryAddress,
-            paymentMethod: "Stripe",
-            paymentStatus: "Paid",
-            stripeSessionId: session.id,
-            stripeSubscriptionId: session.subscription || null,
-            couponCode: couponCode || null,
-            isRecurring: isRecurring === "true",
-          };
-
-          const newSub = await SubscriptionModel.createSubscription(userId, planData);
-
-          // Update user address
-          await db.collection("users").doc(userId).update({
-            address: deliveryAddress,
-            updatedAt: new Date().toISOString(),
-          });
-
-          // Fetch user details for payment confirmation email
-          const userDoc = await db.collection("users").doc(userId).get();
-          const userData = userDoc.exists ? userDoc.data() : {};
-          const userEmail = userData.email || session.customer_details?.email || session.customer_email;
-          const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
-
-          // Send payment confirmation email
-          const EmailService = require("../services/email.service");
-          await EmailService.sendPaymentConfirmationEmail({
-            userEmail,
-            userName,
-            amount: session.amount_total / 100,
-            paymentMethod: "Stripe (Credit/Debit Card)",
-            paymentType: "subscription",
-            details: newSub,
-            deliveryAddress,
-            transactionId: newSub.subscriptionId
-          }).catch(err => console.error("Failed to send subscription payment confirmation email:", err));
-
-          // Log activity
-          await ActivityModel.logActivity(userId, {
-            type: "subscription",
-            action: "created",
-            description: `Subscribed to ${planName} Plan via Stripe (CAD)${couponCode ? ` with coupon ${couponCode}` : ''}`,
-            metadata: {
-              plan: planName,
-              subscriptionId: newSub.subscriptionId,
-              couponCode: couponCode || null,
-            },
-          });
-
-          await NotificationModel.create(userId, {
-            type: "payment",
-            title: "Payment Confirmed",
-            message: `Your payment of $${(session.amount_total / 100).toFixed(2)} CAD for the ${planName} subscription plan has been confirmed.`,
-            metadata: { subscriptionId: newSub.subscriptionId, amount: session.amount_total / 100 }
-          }).catch(err => console.error("Failed to create subscription payment notification:", err));
-
-          // Invalidate cache
-          cache.delete(`user_subscription_${userId}`);
-          cache.delete(`user_subscriptions_${userId}`);
-          cache.delete("admin_dashboard_stats");
-          cache.delete("admin_all_subscriptions");
-          cache.delete("admin_today_deliveries");
-          cache.delete("admin_all_users");
-        } else if (type === "one-time") {
-          // Idempotency: Check if order with this session ID already exists
-          const duplicateCheck = await OrderModel.collection
-            .where("stripeSessionId", "==", session.id)
-            .limit(1)
-            .get();
-
-          if (!duplicateCheck.empty) {
-            console.log(`Webhook already processed for session ${session.id}. Skipping.`);
-            return res.json({ received: true });
-          }
-
-          // Create order in Firestore
-          const userDoc = await db.collection("users").doc(userId).get();
-          const userData = userDoc.exists ? userDoc.data() : {};
-
-          let parsedItems = [];
-          try {
-            parsedItems = JSON.parse(items || "[]");
-          } catch (e) {
-            console.error("Failed to parse items from metadata:", e);
-          }
-
-          const orderData = {
-            userId,
-            customerName: userData.displayName || userData.email || "Unknown Customer",
-            deliveryAddress,
-            orderType: "one-time",
-            plan: null,
-            items: parsedItems,
-            price: session.amount_total / 100,
-            deliveryDate,
-            paymentMethod: "Stripe",
-            paymentStatus: "Paid",
-            stripeSessionId: session.id,
-            couponCode: couponCode || null,
-          };
-
-          const newOrder = await OrderModel.createOrder(orderData);
-
-          // Update user address
-          await db.collection("users").doc(userId).update({
-            address: deliveryAddress,
-            updatedAt: new Date().toISOString(),
-          });
-
-          const userEmail = userData.email || session.customer_details?.email || session.customer_email;
-          const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";
-
-          // Send payment confirmation email
-          const EmailService = require("../services/email.service");
-          await EmailService.sendPaymentConfirmationEmail({
-            userEmail,
-            userName,
-            amount: session.amount_total / 100,
-            paymentMethod: "Stripe (Credit/Debit Card)",
-            paymentType: "one-time",
-            details: parsedItems,
-            deliveryAddress,
-            transactionId: newOrder.orderId
-          }).catch(err => console.error("Failed to send order payment confirmation email:", err));
-
-          // Log activity
-          await ActivityModel.logActivity(userId, {
-            type: "order",
-            action: "placed",
-            description: `Placed one-time meal order via Stripe (CAD)${couponCode ? ` with coupon ${couponCode}` : ''}`,
-            metadata: {
-              orderId: newOrder.orderId,
-              orderType: "one-time",
-              totalItems: parsedItems.length,
-              couponCode: couponCode || null,
-            },
-          });
-
-          await NotificationModel.create(userId, {
-            type: "payment",
-            title: "Payment Confirmed",
-            message: `Your payment of $${(session.amount_total / 100).toFixed(2)} CAD for order #${newOrder.orderId.slice(0, 8)} has been confirmed.`,
-            metadata: { orderId: newOrder.orderId, amount: session.amount_total / 100 }
-          }).catch(err => console.error("Failed to create order payment notification:", err));
-
-          // Invalidate cache
-          cache.delete("admin_dashboard_stats");
-          cache.delete("admin_today_deliveries");
-        }
-
-        // Increment coupon usage count
-        if (couponCode) {
-          const CouponModel = require("../models/coupon.model");
-          await CouponModel.incrementUsage(couponCode).catch((err) =>
-            console.error("Failed to increment coupon usage count:", err)
-          );
-        }
+        await PaymentController.fulfillCheckoutSession(session);
       } else if (event.type === "invoice.payment_succeeded") {
         const invoice = event.data.object;
         const stripeSubscriptionId = invoice.subscription;

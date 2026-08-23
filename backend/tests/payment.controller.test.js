@@ -534,6 +534,81 @@ describe("PaymentController", () => {
       );
       expect(spyConsoleError).toHaveBeenCalledWith("Error retrieving session status:", expect.any(Error));
     });
+
+    it("should trigger synchronous fulfillment fallback for subscription session if status is paid", async () => {
+      req.params = { sessionId: "sess-paid-123" };
+      StripeService.retrieveSession.mockResolvedValue({
+        id: "sess-paid-123",
+        payment_status: "paid",
+        customer_details: { email: "customer@example.com" },
+        amount_total: 15000,
+        subscription: "stripe-sub-id",
+        metadata: {
+          userId: "user-456",
+          type: "subscription",
+          planName: "Standard",
+          deliveryAddress: "123 Main St",
+          deliveryDate: "2026-08-05",
+          items: "[]",
+          isRecurring: "true",
+          replacePlan: "true",
+          couponCode: "PROMO",
+        },
+      });
+
+      // Mock idempotency check to return empty (not processed yet)
+      SubscriptionModel.collection.where.mockReturnThis();
+      SubscriptionModel.collection.limit.mockReturnThis();
+      SubscriptionModel.collection.get.mockResolvedValueOnce({ empty: true });
+
+      // Mock other things for fulfillment
+      SubscriptionModel.getUserSubscription.mockResolvedValueOnce(null);
+      SubscriptionModel.createSubscription.mockResolvedValue({
+        subscriptionId: "sub-999",
+        plan: "Standard",
+      });
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ email: "subscriber@gmail.com", name: "Alice" }),
+      });
+
+      const EmailService = require("../src/services/email.service");
+      EmailService.sendPaymentConfirmationEmail.mockResolvedValue(true);
+
+      await PaymentController.getSessionStatus(req, res);
+
+      // Verify retrieves session and triggers fulfillment
+      expect(StripeService.retrieveSession).toHaveBeenCalledWith("sess-paid-123");
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith(
+        "user-456",
+        expect.objectContaining({
+          plan: "Standard",
+          stripeSessionId: "sess-paid-123",
+        })
+      );
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 200, "Session retrieved successfully", expect.any(Object));
+    });
+
+    it("should skip synchronous fulfillment if session status is unpaid", async () => {
+      req.params = { sessionId: "sess-unpaid-123" };
+      StripeService.retrieveSession.mockResolvedValue({
+        id: "sess-unpaid-123",
+        payment_status: "unpaid",
+        customer_details: { email: "customer@example.com" },
+        amount_total: 15000,
+        metadata: {
+          userId: "user-456",
+          type: "subscription",
+          planName: "Standard",
+        },
+      });
+
+      await PaymentController.getSessionStatus(req, res);
+
+      expect(StripeService.retrieveSession).toHaveBeenCalledWith("sess-unpaid-123");
+      expect(SubscriptionModel.createSubscription).not.toHaveBeenCalled();
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 200, "Session retrieved successfully", expect.any(Object));
+    });
   });
 
   describe("handleWebhook", () => {
