@@ -37,6 +37,7 @@ class StripeService {
     amount,
     planName,
     deliveryAddress,
+    city,
     deliveryDate,
     items,
     successUrl,
@@ -45,6 +46,7 @@ class StripeService {
     isRecurring,
     customDetails,
     replacePlan,
+    deliveryFee = 0,
   }) {
     try {
       const customer = await this.createCustomer(userEmail, userName);
@@ -77,6 +79,7 @@ class StripeService {
           type, // 'subscription' or 'one-time'
           planName: planName || "",
           deliveryAddress,
+          city: city || "",
           deliveryDate: deliveryDate || "",
           items: items ? JSON.stringify(items) : "",
           couponCode: couponCode || "",
@@ -87,6 +90,27 @@ class StripeService {
         success_url: successUrl,
         cancel_url: cancelUrl,
       };
+
+      if (deliveryFee > 0) {
+        const feeInCents = Math.round(deliveryFee * 100);
+        const feeItem = {
+          price_data: {
+            currency: "cad",
+            product_data: {
+              name: "Delivery Fee",
+              description: isSubscriptionMode ? "Monthly delivery service fee" : "One-time delivery service fee",
+            },
+            unit_amount: feeInCents,
+          },
+          quantity: 1,
+        };
+        if (isSubscriptionMode) {
+          feeItem.price_data.recurring = {
+            interval: "month",
+          };
+        }
+        sessionData.line_items.push(feeItem);
+      }
 
       if (isSubscriptionMode) {
         sessionData.line_items[0].price_data.recurring = {

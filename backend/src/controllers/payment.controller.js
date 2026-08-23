@@ -25,21 +25,45 @@ class PaymentController {
         return ResponseUtil.error(res, 400, "Delivery address is required");
       }
 
+      const MenuModel = require("../models/menu.model");
+      const menuConfig = (await MenuModel.getMenuConfig()) || {};
+
+      const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      const categoryKey = MenuModel.getCityCategory(city, menuConfig);
+      const categoryConfig = menuConfig.cityCategories?.[categoryKey];
+
       // Backend price verification for custom subscriptions
       if (type === "subscription" && (customDetails || (planName && planName.toLowerCase().includes("custom")))) {
         if (!customDetails) {
           return ResponseUtil.error(res, 400, "Custom details are required for custom plan");
         }
-        const MenuModel = require("../models/menu.model");
-        const menuConfig = await MenuModel.getMenuConfig();
         try {
-          const calculatedPrice = MenuModel.calculateCustomPrice(customDetails, menuConfig);
+          const calculatedPrice = MenuModel.calculateCustomPrice(customDetails, menuConfig, city);
           if (Math.abs(amount - calculatedPrice) > 0.05) {
             return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${calculatedPrice.toFixed(2)}, Received: $${amount.toFixed(2)}`);
           }
         } catch (err) {
           return ResponseUtil.error(res, 400, err.message);
         }
+      } else if (type === "subscription" && planName) {
+        // Standard plans verification
+        const planKey = planName.toLowerCase();
+        const planInfo = menuConfig.plans?.[planKey];
+        if (planInfo) {
+          let expectedPrice = planInfo.price;
+          if (categoryConfig?.planPrices?.[planKey] !== undefined) {
+            expectedPrice = categoryConfig.planPrices[planKey];
+          }
+          if (Math.abs(amount - expectedPrice) > 0.05) {
+            return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${expectedPrice.toFixed(2)}, Received: $${amount.toFixed(2)}`);
+          }
+        }
+      }
+
+      const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
+      let deliveryFee = 0;
+      if (amount < deliverySettings.minAmountForFreeDelivery) {
+        deliveryFee = deliverySettings.deliveryFee;
       }
 
       let finalAmount = amount;
@@ -101,6 +125,7 @@ class PaymentController {
         amount: stripeAmount,
         planName,
         deliveryAddress,
+        city,
         deliveryDate,
         items,
         successUrl,
@@ -109,6 +134,7 @@ class PaymentController {
         isRecurring,
         customDetails,
         replacePlan,
+        deliveryFee,
       });
 
       return ResponseUtil.send(res, 200, "Checkout session created successfully", {
@@ -155,7 +181,7 @@ class PaymentController {
    * This is idempotent and can be safely called by webhook or success page.
    */
   static async fulfillCheckoutSession(session) {
-    const { userId, type, planName, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan } = session.metadata;
+    const { userId, type, planName, deliveryAddress, city, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan } = session.metadata;
 
     console.log(`Fulfilling successful checkout session ${session.id} for user ${userId}, type ${type}`);
 
@@ -200,12 +226,14 @@ class PaymentController {
         },
         duration: 30, // 30 days
         deliveryAddress,
+        city: city || null,
         paymentMethod: "Stripe",
         paymentStatus: "Paid",
         stripeSessionId: session.id,
         stripeSubscriptionId: session.subscription || null,
         couponCode: couponCode || null,
         isRecurring: isRecurring === "true",
+        deliveryDays: parsedCustomDetails?.deliveryDays || null,
       };
 
       const newSub = await SubscriptionModel.createSubscription(userId, planData);
@@ -298,6 +326,7 @@ class PaymentController {
         userId,
         customerName: userData.displayName || userData.email || "Unknown Customer",
         deliveryAddress,
+        city: city || null,
         orderType: "one-time",
         plan: null,
         items: parsedItems,

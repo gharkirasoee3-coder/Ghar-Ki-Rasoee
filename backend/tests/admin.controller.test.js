@@ -483,6 +483,9 @@ describe("AdminController", () => {
         {
           data: () => ({ subscriptionId: "s7", userId: "u7", plan: "PremiumSpecialFallback" }), // Saturday special missing options fallback
         },
+        {
+          data: () => ({ subscriptionId: "s8", userId: "u8", plan: "Basic", deliveryDays: ["monday"] }), // skipped because today is Sunday
+        },
       ];
       mockCollectionRef.get.mockResolvedValueOnce({ docs: mockSubDocs });
 

@@ -3,6 +3,7 @@ import { Check, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
+import { useCity } from '../../../context/CityContext';
 
 interface Plan {
   key: string;
@@ -54,11 +55,15 @@ const PlansSection: React.FC = () => {
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const { selectedCity } = useCity();
 
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const res = await axios.get(`${ENV.API_URL}/menu/plans`);
+        setLoading(true);
+        const res = await axios.get(`${ENV.API_URL}/menu/plans`, {
+          params: { city: selectedCity }
+        });
         const plansObj = res.data.data.plans;
         const plansArray = Object.keys(plansObj).map(key => {
           const plan = plansObj[key];
@@ -102,7 +107,7 @@ const PlansSection: React.FC = () => {
     };
 
     fetchPlans();
-  }, []);
+  }, [selectedCity]);
 
   if (loading) {
     return (

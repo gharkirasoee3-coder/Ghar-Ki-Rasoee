@@ -12,6 +12,17 @@ class SubscriptionModel {
     const endDate = new Date();
     endDate.setDate(startDate.getDate() + duration);
 
+    const deliveryDays = planData.deliveryDays || [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+
+    const deliveryDaysCount = Math.round((duration / 7) * deliveryDays.length);
+
     const newSubscription = {
       subscriptionId,
       userId: uid,
@@ -20,7 +31,8 @@ class SubscriptionModel {
       status: "Active",
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      remainingDays: duration,
+      remainingDays: deliveryDaysCount,
+      deliveryDays,
       skippedDates: [],
       preferences: {
         defaultMeal: "Veg", // Default preference

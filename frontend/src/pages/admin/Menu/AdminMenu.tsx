@@ -46,6 +46,21 @@ interface WeeklyMenuConfig {
   saturday: MenuItem;
 }
 
+interface CityCategoryConfig {
+  name: string;
+  cities: string[];
+  deliveryFeeSettings: {
+    minAmountForFreeDelivery: number;
+    deliveryFee: number;
+  };
+  planPrices: {
+    basic: number;
+    standard: number;
+    premium: number;
+    customizableBase: number;
+  };
+}
+
 interface MenuConfig {
   plans: Record<string, PlanConfig>;
   customPricingConfig: CustomPricingRules;
@@ -58,6 +73,11 @@ interface MenuConfig {
     vancouver: string;
     others: string;
   };
+  deliveryFeeSettings?: {
+    minAmountForFreeDelivery: number;
+    deliveryFee: number;
+  };
+  cityCategories?: Record<string, CityCategoryConfig>;
 }
 
 const AdminMenu: React.FC = () => {
@@ -67,7 +87,7 @@ const AdminMenu: React.FC = () => {
   const [config, setConfig] = useState<MenuConfig | null>(null);
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'pricing' | 'menu' | 'images'>('pricing');
+  const [activeTab, setActiveTab] = useState<'pricing' | 'menu' | 'images' | 'cities'>('pricing');
   const [selectedPlan, setSelectedPlan] = useState<'basic' | 'standard' | 'premium'>('standard');
   const [selectedDay, setSelectedDay] = useState<'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'>('monday');
 
@@ -182,6 +202,48 @@ const AdminMenu: React.FC = () => {
     if (!config) return;
     const updated = { ...config };
     updated.customPricingConfig[key] = value;
+    setConfig(updated);
+  };
+
+  const updateDeliverySetting = (key: 'minAmountForFreeDelivery' | 'deliveryFee', value: number) => {
+    if (!config) return;
+    const updated = { ...config };
+    if (!updated.deliveryFeeSettings) {
+      updated.deliveryFeeSettings = { minAmountForFreeDelivery: 150, deliveryFee: 15 };
+    }
+    updated.deliveryFeeSettings[key] = value;
+    setConfig(updated);
+  };
+
+  const updateCityCategorySetting = (
+    categoryKey: string,
+    field: 'name' | 'cities' | 'minAmountForFreeDelivery' | 'deliveryFee' | 'basic' | 'standard' | 'premium' | 'customizableBase',
+    value: any
+  ) => {
+    if (!config) return;
+    const updated = { ...config };
+    if (!updated.cityCategories) {
+      updated.cityCategories = {};
+    }
+    if (!updated.cityCategories[categoryKey]) {
+      updated.cityCategories[categoryKey] = {
+        name: categoryKey === 'local' ? 'Local Cities' : 'Far Cities',
+        cities: [],
+        deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+        planPrices: { basic: 150, standard: 190, premium: 220, customizableBase: 100 }
+      };
+    }
+
+    const cat = updated.cityCategories[categoryKey];
+    if (field === 'name') {
+      cat.name = value;
+    } else if (field === 'cities') {
+      cat.cities = value;
+    } else if (field === 'minAmountForFreeDelivery' || field === 'deliveryFee') {
+      cat.deliveryFeeSettings[field] = Number(value) || 0;
+    } else {
+      cat.planPrices[field] = Number(value) || 0;
+    }
     setConfig(updated);
   };
 
@@ -345,6 +407,18 @@ const AdminMenu: React.FC = () => {
             Menu Sheets (Images)
           </span>
           {activeTab === 'images' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-full"></div>}
+        </button>
+        <button
+          onClick={() => setActiveTab('cities')}
+          className={`pb-4 px-2 font-bold text-base transition relative ${
+            activeTab === 'cities' ? 'text-primary' : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Sliders size={18} />
+            City Pricing & Delivery
+          </span>
+          {activeTab === 'cities' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-full"></div>}
         </button>
       </div>
 
@@ -674,6 +748,43 @@ const AdminMenu: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Delivery Fee Settings */}
+                <div className="space-y-3.5 border-t border-slate-100 pt-5">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-l-2 border-primary pl-2">Delivery Fee Settings</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Free Delivery Threshold</label>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                          <input
+                            type="number"
+                            value={config.deliveryFeeSettings?.minAmountForFreeDelivery ?? 150}
+                            onChange={(e) => updateDeliverySetting('minAmountForFreeDelivery', Number(e.target.value))}
+                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Delivery Fee</label>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                          <input
+                            type="number"
+                            value={config.deliveryFeeSettings?.deliveryFee ?? 15}
+                            onChange={(e) => updateDeliverySetting('deliveryFee', Number(e.target.value))}
+                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -849,7 +960,7 @@ const AdminMenu: React.FC = () => {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'images' ? (
         <div className="space-y-6">
           <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 space-y-6 shadow-sm">
             <div className="border-b border-slate-100 pb-4">
@@ -998,6 +1109,208 @@ const AdminMenu: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 space-y-6 shadow-sm">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                <Sliders className="text-primary" />
+                City Pricing & Delivery Config
+              </h2>
+              <p className="text-slate-500 text-xs mt-1">
+                Configure plan prices, delivery thresholds, and flat delivery fees for different city categories.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {(['local', 'far'] as const).map((catKey) => {
+                const category = config.cityCategories?.[catKey] || {
+                  name: catKey === 'local' ? 'Local Cities' : 'Far Cities',
+                  cities: [],
+                  deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+                  planPrices: { basic: 150, standard: 190, premium: 220, customizableBase: 100 }
+                };
+
+                return (
+                  <div key={catKey} className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-6">
+                    <div className="border-b border-slate-200 pb-3 flex justify-between items-center">
+                      <div className="space-y-1 w-2/3">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Category Name</label>
+                        <input
+                          type="text"
+                          value={category.name}
+                          onChange={(e) => updateCityCategorySetting(catKey, 'name', e.target.value)}
+                          className="font-extrabold text-slate-800 text-base bg-transparent border-b border-transparent hover:border-slate-350 focus:border-primary focus:outline-none transition w-full"
+                        />
+                      </div>
+                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase shrink-0 ${
+                        catKey === 'local' ? 'bg-green-150 text-green-800' : 'bg-blue-150 text-blue-800'
+                      }`}>
+                        {catKey.toUpperCase()} TIER
+                      </span>
+                    </div>
+
+                    {/* Cities List */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-700">Covered Cities</label>
+                        <span className="text-[10px] text-slate-400 font-bold">{category.cities.length} Cities</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 min-h-[50px] p-3 bg-white border border-slate-200 rounded-2xl">
+                        {category.cities.length === 0 ? (
+                          <span className="text-slate-400 text-xs italic font-medium p-1">No cities added. Any address containing city names not in "Local Cities" will default to the "Far Cities" pricing model.</span>
+                        ) : (
+                          category.cities.map((city, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl">
+                              {city}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newCities = category.cities.filter((_, i) => i !== idx);
+                                  updateCityCategorySetting(catKey, 'cities', newCities);
+                                }}
+                                className="text-slate-400 hover:text-red-500 font-bold ml-1 transition"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      {/* Add City Input */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          id={`new-city-input-${catKey}`}
+                          placeholder="e.g. Surrey"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const input = e.currentTarget;
+                              const value = input.value.trim();
+                              if (value && !category.cities.includes(value)) {
+                                updateCityCategorySetting(catKey, 'cities', [...category.cities, value]);
+                                input.value = '';
+                              }
+                            }
+                          }}
+                          className="px-3.5 py-2 text-xs font-semibold w-full border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = document.getElementById(`new-city-input-${catKey}`) as HTMLInputElement | null;
+                            const value = input?.value.trim();
+                            if (value && !category.cities.includes(value)) {
+                              updateCityCategorySetting(catKey, 'cities', [...category.cities, value]);
+                              if (input) input.value = '';
+                            }
+                          }}
+                          className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover transition shrink-0"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Delivery settings */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Min Order for Free Delivery</label>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                          <input
+                            type="number"
+                            value={category.deliveryFeeSettings?.minAmountForFreeDelivery ?? 150}
+                            onChange={(e) => updateCityCategorySetting(catKey, 'minAmountForFreeDelivery', e.target.value)}
+                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          />
+                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Flat Delivery Fee</label>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                          <input
+                            type="number"
+                            value={category.deliveryFeeSettings?.deliveryFee ?? 15}
+                            onChange={(e) => updateCityCategorySetting(catKey, 'deliveryFee', e.target.value)}
+                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          />
+                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pricing override section */}
+                    <div className="space-y-4 pt-4 border-t border-slate-200/60">
+                      <h4 className="text-xs font-bold text-slate-800 tracking-wide uppercase">Subscription Tier Price Overrides</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">Basic Plan Price</label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                            <input
+                              type="number"
+                              value={category.planPrices?.basic ?? 150}
+                              onChange={(e) => updateCityCategorySetting(catKey, 'basic', e.target.value)}
+                              className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                            />
+                            <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">Standard Plan Price</label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                            <input
+                              type="number"
+                              value={category.planPrices?.standard ?? 190}
+                              onChange={(e) => updateCityCategorySetting(catKey, 'standard', e.target.value)}
+                              className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                            />
+                            <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">Premium Plan Price</label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                            <input
+                              type="number"
+                              value={category.planPrices?.premium ?? 220}
+                              onChange={(e) => updateCityCategorySetting(catKey, 'premium', e.target.value)}
+                              className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                            />
+                            <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-1">Customizable Base Price</label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                            <input
+                              type="number"
+                              value={category.planPrices?.customizableBase ?? 100}
+                              onChange={(e) => updateCityCategorySetting(catKey, 'customizableBase', e.target.value)}
+                              className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                            />
+                            <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

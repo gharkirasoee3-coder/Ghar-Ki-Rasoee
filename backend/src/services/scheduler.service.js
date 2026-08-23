@@ -69,6 +69,12 @@ class SchedulerService {
            return;
         }
 
+        // Skip if not a scheduled delivery day for this subscription
+        if (sub.deliveryDays && !sub.deliveryDays.includes(dayName)) {
+          console.log(`Skipping order for user ${sub.userId} today (not a scheduled delivery day: ${dayName})`);
+          return;
+        }
+
         const CustomizationModel = require("../models/customization.model");
         const MenuModel = require("../models/menu.model");
         const customization = await CustomizationModel.getBySubscription(sub.subscriptionId);

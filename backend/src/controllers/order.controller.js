@@ -22,7 +22,21 @@ class OrderController {
       const deliveryDate = rawDeliveryDate || new Date().toISOString().split("T")[0];
 
       // Calculate Price
-      let price = PriceUtil.calculateTotal(orderType, plan, items);
+      const MenuModel = require("../models/menu.model");
+      const menuConfig = (await MenuModel.getMenuConfig()) || {};
+      
+      const db = admin.firestore();
+      const userDoc = await db.collection("users").doc(uid).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      const deliveryAddress = req.body.deliveryAddress || userData.address || "No Address Provided";
+
+      const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      const categoryKey = MenuModel.getCityCategory(city, menuConfig);
+      const categoryConfig = menuConfig.cityCategories?.[categoryKey];
+      const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
+
+      const subtotal = PriceUtil.calculateTotal(orderType, plan, items);
+      let price = subtotal;
       let discountAmount = 0;
 
       if (couponCode) {
@@ -66,27 +80,29 @@ class OrderController {
         );
       }
 
+      let deliveryFee = 0;
+      if (subtotal < deliverySettings.minAmountForFreeDelivery) {
+        deliveryFee = deliverySettings.deliveryFee;
+      }
+      price += deliveryFee;
+
       // Handle Subscription Creation
       if (orderType === "Subscription" && plan) {
         const SubscriptionModel = require("../models/subscription.model");
         await SubscriptionModel.createSubscription(uid, plan);
       }
 
-      // Fetch User details for address and name
-      const db = admin.firestore();
-      const userDoc = await db.collection("users").doc(uid).get();
-      const userData = userDoc.exists ? userDoc.data() : {};
-
       const orderData = {
         userId: uid,
         customerName:
           userData.displayName || userData.email || "Unknown Customer",
-        deliveryAddress:
-          req.body.deliveryAddress || userData.address || "No Address Provided",
+        deliveryAddress,
+        city,
         orderType,
         plan: plan || null,
         items: items || {},
         price,
+        deliveryFee,
         deliveryDate,
         paymentMethod: req.body.paymentMethod || "Online",
         paymentStatus:

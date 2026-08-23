@@ -8,9 +8,37 @@ class MenuController {
   static async getAllPlans(req, res) {
     try {
       const config = await MenuModel.getMenuConfig();
+      const city = req.query.city;
+      const categoryKey = MenuModel.getCityCategory(city, config);
+      const categoryConfig = config.cityCategories?.[categoryKey];
+
+      // Deep copy to prevent modifying cache
+      const plans = JSON.parse(JSON.stringify(config.plans));
+      const customPricingConfig = { ...config.customPricingConfig };
+      const deliveryFeeSettings = categoryConfig?.deliveryFeeSettings || config.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
+
+      if (categoryConfig && categoryConfig.planPrices) {
+        if (plans.basic && categoryConfig.planPrices.basic !== undefined) {
+          plans.basic.price = categoryConfig.planPrices.basic;
+        }
+        if (plans.standard && categoryConfig.planPrices.standard !== undefined) {
+          plans.standard.price = categoryConfig.planPrices.standard;
+        }
+        if (plans.premium && categoryConfig.planPrices.premium !== undefined) {
+          plans.premium.price = categoryConfig.planPrices.premium;
+        }
+        if (plans.customizable && categoryConfig.planPrices.customizableBase !== undefined) {
+          plans.customizable.price = categoryConfig.planPrices.customizableBase;
+        }
+        if (categoryConfig.planPrices.customizableBase !== undefined) {
+          customPricingConfig.basePrice = categoryConfig.planPrices.customizableBase;
+        }
+      }
+
       ResponseUtil.send(res, 200, "Plans retrieved successfully", {
-        plans: config.plans,
-        customPricingConfig: config.customPricingConfig
+        plans,
+        customPricingConfig,
+        deliveryFeeSettings
       });
     } catch (error) {
       console.error("Error getting plans:", error);

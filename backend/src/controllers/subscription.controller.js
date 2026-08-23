@@ -24,22 +24,41 @@ class SubscriptionController {
 
       const planName = typeof plan === "object" ? (plan.name || "") : plan;
       let basePrice = planDetails?.price || planDetails || 0;
+
+      const MenuModel = require("../models/menu.model");
+      const menuConfig = (await MenuModel.getMenuConfig()) || {};
       
+      const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      const categoryKey = MenuModel.getCityCategory(city, menuConfig);
+      const categoryConfig = menuConfig.cityCategories?.[categoryKey];
+
       // Backend price verification for custom subscriptions
       if (customDetails || planName.toLowerCase().includes("custom")) {
         if (!customDetails) {
           return ResponseUtil.error(res, 400, "Custom details are required for custom plan");
         }
-        const MenuModel = require("../models/menu.model");
-        const menuConfig = await MenuModel.getMenuConfig();
         try {
-          const calculatedPrice = MenuModel.calculateCustomPrice(customDetails, menuConfig);
+          const calculatedPrice = MenuModel.calculateCustomPrice(customDetails, menuConfig, city);
           if (Math.abs(basePrice - calculatedPrice) > 0.05) {
             return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${calculatedPrice.toFixed(2)}, Received: $${basePrice.toFixed(2)}`);
           }
           basePrice = calculatedPrice;
         } catch (err) {
           return ResponseUtil.error(res, 400, err.message);
+        }
+      } else {
+        // Standard plan verification
+        const planKey = planName.toLowerCase();
+        const planInfo = menuConfig.plans?.[planKey];
+        if (planInfo) {
+          let expectedPrice = planInfo.price;
+          if (categoryConfig?.planPrices?.[planKey] !== undefined) {
+            expectedPrice = categoryConfig.planPrices[planKey];
+          }
+          if (Math.abs(basePrice - expectedPrice) > 0.05) {
+            return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${expectedPrice.toFixed(2)}, Received: $${basePrice.toFixed(2)}`);
+          }
+          basePrice = expectedPrice;
         }
       }
 
@@ -87,6 +106,13 @@ class SubscriptionController {
         );
       }
 
+      const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
+      let deliveryFee = 0;
+      if (basePrice < deliverySettings.minAmountForFreeDelivery) {
+        deliveryFee = deliverySettings.deliveryFee;
+      }
+      finalPrice += deliveryFee;
+
       let existing = null;
 
       // Check if user already has active subscription (only if replacePlan !== false)
@@ -119,9 +145,12 @@ class SubscriptionController {
         },
         duration: (durationMonths || 1) * 30, // Convert months to days approx
         deliveryAddress,
+        city,
         paymentMethod,
         paymentStatus,
         couponCode: couponCode || null,
+        deliveryDays: customDetails?.deliveryDays || null,
+        deliveryFee,
       };
 
       const newSub = await SubscriptionModel.createSubscription(uid, planData);

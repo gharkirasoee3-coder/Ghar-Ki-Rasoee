@@ -214,6 +214,8 @@ const ViewCustomerCustomization: React.FC = () => {
             const dayMenu = weeklyMenu[day as keyof typeof weeklyMenu] as DayMenu;
             const dayPrefs = preferences[day] || {};
             
+            const isDeliveryDay = !customerInfo || !customerInfo.deliveryDays || customerInfo.deliveryDays.includes(day);
+
             const isSatSpecial = dayMenu.isSaturdaySpecial && 
               (planType === 'premium' || (planType === 'custom' && customSpecs?.saturdaySpecial));
 
@@ -242,23 +244,35 @@ const ViewCustomerCustomization: React.FC = () => {
             const defaultSabzi2 = dayMenu.sabziSet2?.[0] || (dayMenu.sabziOptions && dayMenu.sabziOptions.length > 1 ? dayMenu.sabziOptions[1] : 'Chef\'s Choice');
             
             return (
-              <div key={day} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
+              <div key={day} className={`bg-white rounded-2xl border overflow-hidden flex flex-col group hover:shadow-md transition-shadow ${
+                  !isDeliveryDay ? 'border-gray-200 opacity-55 grayscale bg-gray-50/50' : 'border-gray-100 shadow-sm'
+              }`}>
                 <div className={`px-5 py-4 border-b flex justify-between items-center ${
+                    !isDeliveryDay ? 'bg-gray-100/70 border-gray-200' :
                     day === 'saturday' ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'
                 }`}>
                    <h3 className={`font-black text-sm uppercase tracking-wider flex items-center gap-2 ${
+                       !isDeliveryDay ? 'text-gray-400' :
                        day === 'saturday' ? 'text-orange-700' : 'text-gray-700'
                    }`}>
                        <Calendar size={14} />
                        {dayNames[day]}
                    </h3>
-                   {!customization && (
+                   {!isDeliveryDay ? (
+                     <span className="text-[9px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-md uppercase border border-red-200/50">❌ Not Scheduled</span>
+                   ) : !customization ? (
                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md uppercase">Default</span>
-                   )}
+                   ) : null}
                 </div>
                 
                 <div className="p-5 flex-1 space-y-4">
-                    {isSatSpecial ? (
+                    {!isDeliveryDay ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <span className="text-2xl mb-1">❌</span>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">No Delivery Scheduled</p>
+                            <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">The customer has removed this day from their weekly plan.</p>
+                        </div>
+                    ) : isSatSpecial ? (
                         <div className="space-y-4">
                             <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
                                 <p className="text-[10px] text-yellow-700 font-bold uppercase mb-2 flex items-center gap-1">
@@ -319,16 +333,18 @@ const ViewCustomerCustomization: React.FC = () => {
                     )}
                 </div>
                 
-                <div className="bg-gray-50/50 px-5 py-3.5 mt-auto border-t border-gray-50 flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-gray-500">
-                    <span>Includes: {getRotiCount()} Roti{getDessertText() ? `, ${getDessertText()}` : ''}</span>
-                    <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase border ${
-                      getRaitaText() === 'Salad'
-                        ? 'bg-orange-50 text-orange-700 border-orange-200'
-                        : 'bg-teal-50 text-teal-700 border-teal-150'
-                    }`}>
-                      {getRaitaText() === 'Salad' ? '🥗 Salad' : '🥣 Raita'}
-                    </span>
-                </div>
+                {isDeliveryDay && (
+                  <div className="bg-gray-50/50 px-5 py-3.5 mt-auto border-t border-gray-50 flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-gray-500">
+                      <span>Includes: {getRotiCount()} Roti{getDessertText() ? `, ${getDessertText()}` : ''}</span>
+                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase border ${
+                        getRaitaText() === 'Salad'
+                          ? 'bg-orange-50 text-orange-700 border-orange-200'
+                          : 'bg-teal-50 text-teal-700 border-teal-150'
+                      }`}>
+                        {getRaitaText() === 'Salad' ? '🥗 Salad' : '🥣 Raita'}
+                      </span>
+                  </div>
+                )}
               </div>
             );
           })}

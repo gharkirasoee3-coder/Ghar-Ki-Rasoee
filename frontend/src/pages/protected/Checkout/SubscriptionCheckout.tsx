@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PageContainer from '../../../components/layout/PageContainer';
-import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X } from 'lucide-react';
+import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
 import LocationPicker from '../../../components/common/LocationPicker';
+import { useCity } from '../../../context/CityContext';
 
 const SubscriptionCheckout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { plan, address: prefilledAddress } = location.state || {};
+  const { selectedCity } = useCity();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -45,6 +47,70 @@ const SubscriptionCheckout: React.FC = () => {
   } | null>(null);
 
   const isOneTime = plan?.type === 'one-time';
+
+  const [selectedDays, setSelectedDays] = useState<string[]>(
+    plan?.customDetails?.deliveryDays || [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday'
+    ]
+  );
+
+  const [deliverySettings, setDeliverySettings] = useState<{ minAmountForFreeDelivery: number; deliveryFee: number }>({
+    minAmountForFreeDelivery: 150,
+    deliveryFee: 15
+  });
+
+  useEffect(() => {
+    const fetchDeliverySettings = async () => {
+      try {
+        const res = await axios.get(`${ENV.API_URL}/menu/plans`, {
+          params: { city: selectedCity }
+        });
+        if (res.data.success && res.data.data.deliveryFeeSettings) {
+          setDeliverySettings(res.data.data.deliveryFeeSettings);
+        }
+      } catch (err) {
+        console.error("Failed to fetch delivery settings:", err);
+      }
+    };
+    fetchDeliverySettings();
+  }, [selectedCity]);
+
+  const getAdjustedPrice = () => {
+    const basePrice = plan?.price || 0;
+    if (isOneTime) return basePrice;
+    const adjusted = (basePrice * selectedDays.length) / 6;
+    return Math.round(adjusted * 100) / 100;
+  };
+
+  const getCouponAmounts = () => {
+    const baseAmount = getAdjustedPrice();
+    if (!appliedCoupon) return { discountAmount: 0, finalAmount: baseAmount };
+
+    let discount = 0;
+    if (appliedCoupon.discountType === 'percentage') {
+      discount = baseAmount * (appliedCoupon.discountValue / 100);
+    } else {
+      discount = appliedCoupon.discountValue;
+    }
+    discount = Math.min(discount, baseAmount);
+    const minCharge = paymentMethod === 'Stripe' ? 0.50 : 0;
+    const final = Math.max(minCharge, baseAmount - discount);
+    return {
+      discountAmount: discount,
+      finalAmount: Math.round(final * 100) / 100
+    };
+  };
+
+  const { discountAmount, finalAmount } = getCouponAmounts();
+  const basePriceForDelivery = getAdjustedPrice();
+  const isFreeDelivery = basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
+  const deliveryFee = isFreeDelivery ? 0 : deliverySettings.deliveryFee;
+  const totalAmount = Math.round((finalAmount + deliveryFee) * 100) / 100;
 
   useEffect(() => {
     const checkActiveSubscription = async () => {
@@ -80,6 +146,7 @@ const SubscriptionCheckout: React.FC = () => {
   const handleApplyCoupon = async () => {
     if (!couponInput.trim()) return;
     setValidatingCoupon(true);
+    setError('');
     setCouponError('');
     setCouponSuccess('');
     try {
@@ -88,7 +155,7 @@ const SubscriptionCheckout: React.FC = () => {
         `${ENV.API_URL}/payments/validate-coupon`,
         {
           code: couponInput.trim(),
-          amount: plan.price
+          amount: getAdjustedPrice()
         },
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -146,6 +213,11 @@ const SubscriptionCheckout: React.FC = () => {
       return;
     }
 
+    if (!isOneTime && selectedDays.length === 0) {
+      setError("Please select at least one delivery day.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -154,19 +226,27 @@ const SubscriptionCheckout: React.FC = () => {
 
       const token = await user.getIdToken();
 
+      const customDetailsPayload = isOneTime ? undefined : {
+        ...(plan.customDetails || {}),
+        deliveryDays: selectedDays,
+        basePlan: plan.customDetails?.basePlan || plan.name
+      };
+
       if (paymentMethod === 'Stripe') {
         const response = await axios.post(
           `${ENV.API_URL}/payments/create-checkout-session`,
           {
             type: isOneTime ? 'one-time' : 'subscription',
             planName: plan.name,
-            amount: plan.price,
+            amount: getAdjustedPrice(),
             deliveryAddress: address,
+            city: selectedCity,
             couponCode: appliedCoupon ? appliedCoupon.code : undefined,
             isRecurring: isOneTime ? false : isRecurring,
-            customDetails: plan.customDetails || undefined,
-            items: [{ name: plan.name, quantity: 1, price: plan.price }],
+            customDetails: customDetailsPayload,
+            items: [{ name: plan.name, quantity: 1, price: getAdjustedPrice() }],
             replacePlan: chosenReplacePlan,
+            deliveryFee,
           },
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -188,9 +268,11 @@ const SubscriptionCheckout: React.FC = () => {
               items: [{ name: plan.name, quantity: 1, price: plan.price }],
               price: plan.price,
               deliveryAddress: address,
+              city: selectedCity,
               paymentMethod: 'Cash on Delivery',
               paymentStatus: 'Pending',
               couponCode: appliedCoupon ? appliedCoupon.code : undefined,
+              deliveryFee,
             },
             {
               headers: { Authorization: `Bearer ${token}` },
@@ -208,14 +290,19 @@ const SubscriptionCheckout: React.FC = () => {
             `${ENV.API_URL}/subscriptions`,
             {
               plan: plan.name,
-              planDetails: plan,
+              planDetails: {
+                ...plan,
+                price: getAdjustedPrice()
+              },
               durationMonths: 1,
               deliveryAddress: address,
+              city: selectedCity,
               paymentMethod: 'Cash on Delivery',
               paymentStatus: 'Pending',
               couponCode: appliedCoupon ? appliedCoupon.code : undefined,
-              customDetails: plan.customDetails || undefined,
+              customDetails: customDetailsPayload,
               replacePlan: chosenReplacePlan,
+              deliveryFee,
             },
             {
               headers: { Authorization: `Bearer ${token}` },
@@ -271,7 +358,7 @@ const SubscriptionCheckout: React.FC = () => {
                 <div className="flex justify-between items-center mb-3">
                   <span className="font-bold text-lg text-gray-800">{plan.name}</span>
                   <span className="font-extrabold text-xl text-primary">
-                    {isOneTime ? `$${plan.price}` : `$${plan.price}/mo`}
+                    {isOneTime ? `$${plan.price}` : `$${getAdjustedPrice()}/mo`}
                   </span>
                 </div>
                 <ul className="space-y-2.5 text-sm text-gray-600 mt-4">
@@ -389,23 +476,45 @@ const SubscriptionCheckout: React.FC = () => {
                 )}
               </div>
 
-              {appliedCoupon && (
-                <div className="flex justify-between items-center text-sm font-semibold text-green-600 border-t pt-3 mb-2 mt-4">
-                  <span>Discount</span>
-                  <span>-${appliedCoupon.discountAmount.toFixed(2)} CAD</span>
+              <div className="border-t border-gray-100 pt-4 mt-4 space-y-2">
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Subtotal</span>
+                  <span className="font-semibold">${getAdjustedPrice().toFixed(2)} CAD</span>
                 </div>
-              )}
 
-              <div className="flex justify-between items-center font-bold text-lg border-t pt-4">
+                {appliedCoupon && (
+                  <div className="flex justify-between items-center text-sm font-semibold text-green-600">
+                    <span>Discount ({appliedCoupon.code})</span>
+                    <span>-${discountAmount.toFixed(2)} CAD</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Delivery Fee</span>
+                  {deliveryFee > 0 ? (
+                    <span className="font-semibold text-orange-600">+${deliveryFee.toFixed(2)} CAD</span>
+                  ) : (
+                    <span className="font-bold text-green-600">FREE</span>
+                  )}
+                </div>
+
+                {deliveryFee > 0 && (
+                  <p className="text-[10px] text-gray-400 font-bold leading-normal">
+                    Add ${(deliverySettings.minAmountForFreeDelivery - basePriceForDelivery).toFixed(2)} CAD more to unlock free delivery (minimum ${deliverySettings.minAmountForFreeDelivery} CAD).
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center font-bold text-lg border-t pt-4 mt-4">
                 <span className="text-gray-700">Total</span>
                 <span className="text-xl text-gray-950">
-                  ${appliedCoupon ? appliedCoupon.finalAmount.toFixed(2) : plan.price.toFixed(2)} CAD
+                  ${totalAmount.toFixed(2)} CAD
                 </span>
               </div>
 
               {appliedCoupon && appliedCoupon.duration === 'repeating' && (
                 <p className="text-[10px] text-gray-400 font-bold text-right mt-1.5 leading-snug">
-                  Charges automatically renew at ${plan.price.toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
+                  Charges automatically renew at ${getAdjustedPrice().toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
                 </p>
               )}
             </div>
@@ -444,6 +553,56 @@ const SubscriptionCheckout: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Delivery Days Selection */}
+            {!isOneTime && (
+              <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Calendar className="text-primary" size={22} /> Delivery Schedule
+                </h2>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Choose which days of the week you would like to receive deliveries. The price of your subscription scales dynamically based on the frequency.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((day) => {
+                    const isSelected = selectedDays.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedDays(selectedDays.filter((d) => d !== day));
+                          } else {
+                            setSelectedDays([...selectedDays, day]);
+                          }
+                        }}
+                        className={`py-3 px-4 rounded-xl border-2 font-semibold text-sm transition-all duration-200 capitalize flex items-center justify-between ${
+                          isSelected
+                            ? 'border-primary bg-primary/5 text-primary shadow-sm shadow-primary/5'
+                            : 'border-gray-100 hover:border-gray-200 text-gray-600'
+                        }`}
+                      >
+                        <span>{day}</span>
+                        {isSelected ? (
+                          <Check size={16} className="text-primary" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border border-gray-300" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedDays.length === 0 && (
+                  <p className="text-red-500 text-xs font-semibold flex items-center gap-1 mt-2">
+                    <AlertCircle size={14} /> Please select at least one delivery day.
+                  </p>
+                )}
+                <p className="text-xs text-gray-400 font-medium bg-gray-50 p-3 rounded-xl border border-gray-200/50 mt-3">
+                  💡 <strong>Tip:</strong> If you select fewer days, your monthly billing will decrease proportionally. Your meal options/customizations will apply to the days you select.
+                </p>
+              </div>
+            )}
 
             {/* Payment Section */}
             <form onSubmit={handleCheckout} className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-6">

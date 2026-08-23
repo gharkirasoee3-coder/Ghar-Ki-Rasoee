@@ -44,6 +44,8 @@ interface Subscription {
   paymentStatus: string;
   skippedDates?: string[];
   remainingDays?: number;
+  deliveryDays?: string[];
+  deliveryFee?: number;
 }
 
 interface ActivityLog {

@@ -64,22 +64,29 @@ jest.mock("../src/config/firebase.config", () => ({
 jest.mock("../src/models/menu.model", () => ({
   getMenuConfig: jest.fn(),
   calculateCustomPrice: jest.fn(),
-}), { virtual: true });
+  getCityCategory: jest.fn((city) => (city && city.toLowerCase() === "toronto" ? "far" : "local")),
+  getCityFromAddress: jest.fn((addr) => {
+    if (!addr) return null;
+    if (addr.toLowerCase().includes("toronto")) return "Toronto";
+    if (addr.toLowerCase().includes("vancouver")) return "Vancouver";
+    return null;
+  }),
+}));
 
 jest.mock("../src/models/coupon.model", () => ({
   getCoupon: jest.fn(),
-  incrementUsage: jest.fn(),
-}), { virtual: true });
+  incrementUsage: jest.fn().mockResolvedValue(true),
+}));
 
 jest.mock("../src/models/user.model", () => ({
   collection: {
     doc: mockDoc,
   },
-}), { virtual: true });
+}));
 
 jest.mock("../src/services/stripe.service", () => ({
-  cancelSubscription: jest.fn(),
-}), { virtual: true });
+  cancelSubscription: jest.fn().mockResolvedValue(true),
+}));
 
 describe("SubscriptionController", () => {
   let req, res;
@@ -207,6 +214,72 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.createSubscription(req, res);
       expect(spyConsoleError).toHaveBeenCalledWith("Error updating user address during sub:", expect.any(Error));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+    });
+
+    it("should validate standard plan price and succeed if correct", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: {
+          standard: { price: 190 },
+        },
+      });
+
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-std" });
+
+      req.body = {
+        plan: "Standard",
+        planDetails: 190,
+      };
+
+      await SubscriptionController.createSubscription(req, res);
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+    });
+
+    it("should fail standard plan checkout if pricing validation fails", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: {
+          standard: { price: 190 },
+        },
+      });
+
+      req.body = {
+        plan: "Standard",
+        planDetails: 100, // incorrect
+      };
+
+      await SubscriptionController.createSubscription(req, res);
+      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, expect.stringContaining("Pricing validation failed"));
+    });
+
+    it("should validate standard plan price using city override if present", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: {
+          standard: { price: 190 },
+        },
+        cityCategories: {
+          far: {
+            planPrices: {
+              standard: 210,
+            },
+          },
+        },
+      });
+
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-override" });
+
+      // Toronto is "far" according to the mock getCityCategory
+      req.body = {
+        plan: "Standard",
+        planDetails: 210,
+        city: "Toronto",
+      };
+
+      await SubscriptionController.createSubscription(req, res);
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
       expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
     });
 

@@ -238,6 +238,8 @@ class AdminController {
         const sub = doc.data();
         if (sub.skippedDates && sub.skippedDates.includes(todayStr)) continue;
 
+        if (sub.deliveryDays && !sub.deliveryDays.includes(dayName)) continue;
+
         const userDoc = await db.collection("users").doc(sub.userId).get();
         const userData = userDoc.exists
           ? userDoc.data()

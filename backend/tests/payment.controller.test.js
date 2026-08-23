@@ -60,6 +60,13 @@ jest.mock("../src/models/notification.model", () => ({
 jest.mock("../src/models/menu.model", () => ({
   getMenuConfig: jest.fn(),
   calculateCustomPrice: jest.fn(),
+  getCityCategory: jest.fn((city) => (city && city.toLowerCase() === "toronto" ? "far" : "local")),
+  getCityFromAddress: jest.fn((addr) => {
+    if (!addr) return null;
+    if (addr.toLowerCase().includes("toronto")) return "Toronto";
+    if (addr.toLowerCase().includes("vancouver")) return "Vancouver";
+    return null;
+  }),
 }), { virtual: true });
 
 jest.mock("../src/models/coupon.model", () => ({
@@ -377,6 +384,78 @@ describe("PaymentController", () => {
           amount: 100, // recurring subscription checkout uses the base amount
         })
       );
+    });
+
+    it("should validate standard plan price and succeed if correct", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: {
+          standard: { price: 190 },
+        },
+      });
+
+      StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-std", url: "https://stripe.com/checkout" });
+
+      req.body = {
+        amount: 190,
+        deliveryAddress: "123 Main St",
+        planName: "Standard",
+        type: "subscription",
+      };
+
+      await PaymentController.createCheckoutSession(req, res);
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(StripeService.createCheckoutSession).toHaveBeenCalled();
+    });
+
+    it("should fail standard plan checkout if pricing validation fails", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: {
+          standard: { price: 190 },
+        },
+      });
+
+      req.body = {
+        amount: 100, // incorrect
+        deliveryAddress: "123 Main St",
+        planName: "Standard",
+        type: "subscription",
+      };
+
+      await PaymentController.createCheckoutSession(req, res);
+      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, expect.stringContaining("Pricing validation failed"));
+    });
+
+    it("should validate standard plan price using city override if present", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: {
+          standard: { price: 190 },
+        },
+        cityCategories: {
+          far: {
+            planPrices: {
+              standard: 210,
+            },
+          },
+        },
+      });
+
+      StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-override", url: "https://stripe.com/checkout" });
+
+      // Toronto is "far" according to the mock getCityCategory
+      req.body = {
+        amount: 210,
+        deliveryAddress: "Toronto, ON",
+        planName: "Standard",
+        type: "subscription",
+        city: "Toronto",
+      };
+
+      await PaymentController.createCheckoutSession(req, res);
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(StripeService.createCheckoutSession).toHaveBeenCalled();
     });
 
     it("should successfully create session for custom plan when pricing validation succeeds", async () => {

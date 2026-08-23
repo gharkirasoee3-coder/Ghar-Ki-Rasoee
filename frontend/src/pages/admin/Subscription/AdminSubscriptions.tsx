@@ -30,6 +30,8 @@ interface Subscription {
   price?: number;
   planDetails?: { price: number };
   cancellationReason?: string;
+  deliveryDays?: string[];
+  deliveryFee?: number;
 }
 
 const AdminSubscriptions: React.FC = () => {
@@ -229,6 +231,35 @@ const AdminSubscriptions: React.FC = () => {
                 <div className="bg-gray-50 p-2 rounded-lg">
                    <p className="text-xs text-gray-500">Plan</p>
                    <p className="font-medium text-gray-900">{sub.plan}</p>
+                   {sub.deliveryDays ? (
+                     <div className="flex flex-wrap gap-1 mt-1">
+                       {['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((dShort) => {
+                         const dLong: { [key: string]: string } = {
+                           mon: 'monday',
+                           tue: 'tuesday',
+                           wed: 'wednesday',
+                           thu: 'thursday',
+                           fri: 'friday',
+                           sat: 'saturday'
+                         };
+                         const active = sub.deliveryDays?.includes(dLong[dShort]);
+                         return (
+                           <span
+                             key={dShort}
+                             className={`text-[9px] px-1 rounded font-extrabold uppercase tracking-tight ${
+                               active
+                                 ? 'bg-primary/10 text-primary border border-primary/20'
+                                 : 'bg-gray-100 text-gray-400 opacity-50'
+                             }`}
+                           >
+                             {dShort}
+                           </span>
+                         );
+                       })}
+                     </div>
+                   ) : (
+                     <span className="text-[10px] text-gray-400 font-medium">Mon-Sat</span>
+                   )}
                 </div>
                 <div className="bg-gray-50 p-2 rounded-lg">
                    <p className="text-xs text-gray-500">Price</p>
@@ -320,7 +351,38 @@ const AdminSubscriptions: React.FC = () => {
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className="text-sm font-medium text-gray-900">{sub.plan}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-gray-900">{sub.plan}</span>
+                      {sub.deliveryDays ? (
+                        <div className="flex flex-wrap gap-1 mt-1 max-w-[150px]">
+                          {['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((dShort) => {
+                            const dLong: { [key: string]: string } = {
+                              mon: 'monday',
+                              tue: 'tuesday',
+                              wed: 'wednesday',
+                              thu: 'thursday',
+                              fri: 'friday',
+                              sat: 'saturday'
+                            };
+                            const active = sub.deliveryDays?.includes(dLong[dShort]);
+                            return (
+                              <span
+                                key={dShort}
+                                className={`text-[9px] px-1 rounded font-extrabold uppercase tracking-tight ${
+                                  active
+                                    ? 'bg-primary/10 text-primary border border-primary/20'
+                                    : 'bg-gray-100 text-gray-400 opacity-50'
+                                }`}
+                              >
+                                {dShort}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-gray-400 font-medium">Mon-Sat</span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4">
                     <span className="text-sm font-bold text-gray-900">${getPlanPrice(sub)}</span>

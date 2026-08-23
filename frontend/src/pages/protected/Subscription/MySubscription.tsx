@@ -23,6 +23,8 @@ interface Subscription {
   paymentStatus: string;
   isRecurring: boolean;
   couponCode?: string | null;
+  deliveryDays?: string[];
+  deliveryFee?: number;
 }
 
 const StatusBadge = ({ status }: { status: string }) => {

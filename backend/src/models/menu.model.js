@@ -53,6 +53,40 @@ class MenuModel {
             dessertPriceWeekly: 10,
             dessertPriceDaily: 30,
             saturdaySpecialPrice: 15
+          },
+          deliveryFeeSettings: {
+            minAmountForFreeDelivery: 150,
+            deliveryFee: 15
+          },
+          cityCategories: {
+            local: {
+              name: "Local Cities",
+              cities: ["Vancouver", "Burnaby", "Richmond", "New Westminster", "Langley", "Surrey"],
+              deliveryFeeSettings: {
+                minAmountForFreeDelivery: 150,
+                deliveryFee: 15
+              },
+              planPrices: {
+                basic: 150,
+                standard: 190,
+                premium: 220,
+                customizableBase: 100
+              }
+            },
+            far: {
+              name: "Far Cities",
+              cities: ["Toronto", "Calgary", "Montreal", "Ottawa", "Edmonton", "Winnipeg"],
+              deliveryFeeSettings: {
+                minAmountForFreeDelivery: 200,
+                deliveryFee: 25
+              },
+              planPrices: {
+                basic: 180,
+                standard: 220,
+                premium: 250,
+                customizableBase: 120
+              }
+            }
           }
         };
 
@@ -66,6 +100,44 @@ class MenuModel {
         data.menuImages = {
           vancouver: "/For-Vancouver-Burnaby-Richmond-New-Westminster-Langley.jpeg",
           others: "/remaining-city.jpeg"
+        };
+      }
+      if (!data.deliveryFeeSettings) {
+        data.deliveryFeeSettings = {
+          minAmountForFreeDelivery: 150,
+          deliveryFee: 15
+        };
+      }
+      if (!data.cityCategories) {
+        data.cityCategories = {
+          local: {
+            name: "Local Cities",
+            cities: ["Vancouver", "Burnaby", "Richmond", "New Westminster", "Langley", "Surrey"],
+            deliveryFeeSettings: {
+              minAmountForFreeDelivery: 150,
+              deliveryFee: 15
+            },
+            planPrices: {
+              basic: data.plans?.basic?.price ?? 150,
+              standard: data.plans?.standard?.price ?? 190,
+              premium: data.plans?.premium?.price ?? 220,
+              customizableBase: data.customPricingConfig?.basePrice ?? 100
+            }
+          },
+          far: {
+            name: "Far Cities",
+            cities: ["Toronto", "Calgary", "Montreal", "Ottawa", "Edmonton", "Winnipeg"],
+            deliveryFeeSettings: {
+              minAmountForFreeDelivery: 200,
+              deliveryFee: 25
+            },
+            planPrices: {
+              basic: 180,
+              standard: 220,
+              premium: 250,
+              customizableBase: 120
+            }
+          }
         };
       }
       this.cache = data;
@@ -104,9 +176,88 @@ class MenuModel {
           dessertPriceWeekly: 10,
           dessertPriceDaily: 30,
           saturdaySpecialPrice: 15
+        },
+        deliveryFeeSettings: {
+          minAmountForFreeDelivery: 150,
+          deliveryFee: 15
+        },
+        cityCategories: {
+          local: {
+            name: "Local Cities",
+            cities: ["Vancouver", "Burnaby", "Richmond", "New Westminster", "Langley", "Surrey"],
+            deliveryFeeSettings: {
+              minAmountForFreeDelivery: 150,
+              deliveryFee: 15
+            },
+            planPrices: {
+              basic: 150,
+              standard: 190,
+              premium: 220,
+              customizableBase: 100
+            }
+          },
+          far: {
+            name: "Far Cities",
+            cities: ["Toronto", "Calgary", "Montreal", "Ottawa", "Edmonton", "Winnipeg"],
+            deliveryFeeSettings: {
+              minAmountForFreeDelivery: 200,
+              deliveryFee: 25
+            },
+            planPrices: {
+              basic: 180,
+              standard: 220,
+              premium: 250,
+              customizableBase: 120
+            }
+          }
         }
       };
     }
+  }
+
+  /**
+   * Get category key (local/far) for a given city name
+   */
+  static getCityCategory(city, config) {
+    if (!city) return "local";
+    const normalizedCity = city.trim().toLowerCase();
+    
+    const categories = config.cityCategories || {
+      local: {
+        cities: ["vancouver", "burnaby", "richmond", "new westminster", "langley", "surrey"]
+      },
+      far: {
+        cities: ["toronto", "calgary", "montreal", "ottawa", "edmonton", "winnipeg"]
+      }
+    };
+
+    for (const key of Object.keys(categories)) {
+      const catCities = categories[key].cities || [];
+      if (catCities.map(c => c.toLowerCase()).includes(normalizedCity)) {
+        return key;
+      }
+    }
+
+    return "far";
+  }
+
+  /**
+   * Parse delivery address to check if it contains any configured city names
+   */
+  static getCityFromAddress(address, config) {
+    if (!address) return null;
+    const normalizedAddress = address.toLowerCase();
+
+    const categories = config.cityCategories || {};
+    for (const key of Object.keys(categories)) {
+      const cities = categories[key].cities || [];
+      for (const city of cities) {
+        if (normalizedAddress.includes(city.toLowerCase())) {
+          return city;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -183,8 +334,12 @@ class MenuModel {
   /**
    * Calculate price for a customizable plan based on pricing config
    */
-  static calculateCustomPrice(customDetails, config) {
-    const rules = config.customPricingConfig || {
+  static calculateCustomPrice(customDetails, config, city = null) {
+    const resolvedCity = city || customDetails?.city || null;
+    const categoryKey = this.getCityCategory(resolvedCity, config);
+    const categoryConfig = config.cityCategories?.[categoryKey];
+
+    const rules = { ...(config.customPricingConfig || {
       basePrice: 100,
       pricePerRoti: 5,
       pricePerSabzi: 20,
@@ -193,7 +348,11 @@ class MenuModel {
       dessertPriceWeekly: 10,
       dessertPriceDaily: 30,
       saturdaySpecialPrice: 15
-    };
+    }) };
+
+    if (categoryConfig?.planPrices?.customizableBase !== undefined) {
+      rules.basePrice = categoryConfig.planPrices.customizableBase;
+    }
 
     const getRaitaPrice = (opt) => {
       if (!opt) return 0;
@@ -212,6 +371,8 @@ class MenuModel {
     };
 
     const basePlan = customDetails.basePlan;
+    let basePlanPrice = 0;
+
     if (!basePlan || basePlan === "scratch") {
       const basePrice = rules.basePrice;
       const rotiPrice = (Number(customDetails.roti) || 0) * rules.pricePerRoti;
@@ -219,7 +380,7 @@ class MenuModel {
       const raitaPrice = getRaitaPrice(customDetails.raitaOption);
       const dessertPrice = getDessertPrice(customDetails.dessertOption);
       const satSpecialPrice = customDetails.saturdaySpecial ? rules.saturdaySpecialPrice : 0;
-      return basePrice + rotiPrice + sabziPrice + raitaPrice + dessertPrice + satSpecialPrice;
+      basePlanPrice = basePrice + rotiPrice + sabziPrice + raitaPrice + dessertPrice + satSpecialPrice;
     } else {
       const planKey = basePlan.toLowerCase();
       const planInfo = config.plans[planKey];
@@ -254,15 +415,32 @@ class MenuModel {
         baseSaturday = true;
       }
 
-      const planBasePrice = planInfo.price;
-      const rotiDiff = (Number(customDetails.roti) - baseRoti) * rules.pricePerRoti;
-      const sabziDiff = (Number(customDetails.sabziChoices) - baseSabzi) * rules.pricePerSabzi;
-      const raitaDiff = getRaitaPrice(customDetails.raitaOption) - getRaitaPrice(baseRaita);
-      const dessertDiff = getDessertPrice(customDetails.dessertOption) - getDessertPrice(baseDessert);
-      const satSpecialDiff = (customDetails.saturdaySpecial ? rules.saturdaySpecialPrice : 0) - (baseSaturday ? rules.saturdaySpecialPrice : 0);
+      const rotiVal = customDetails.roti !== undefined ? Number(customDetails.roti) : baseRoti;
+      const sabziVal = customDetails.sabziChoices !== undefined ? Number(customDetails.sabziChoices) : baseSabzi;
+      const raitaOpt = customDetails.raitaOption !== undefined ? customDetails.raitaOption : baseRaita;
+      const dessertOpt = customDetails.dessertOption !== undefined ? customDetails.dessertOption : baseDessert;
+      const satSpecial = customDetails.saturdaySpecial !== undefined ? !!customDetails.saturdaySpecial : baseSaturday;
 
-      return planBasePrice + rotiDiff + sabziDiff + raitaDiff + dessertDiff + satSpecialDiff;
+      let planBasePrice = planInfo.price;
+      if (categoryConfig?.planPrices?.[planKey] !== undefined) {
+        planBasePrice = categoryConfig.planPrices[planKey];
+      }
+
+      const rotiDiff = (rotiVal - baseRoti) * rules.pricePerRoti;
+      const sabziDiff = (sabziVal - baseSabzi) * rules.pricePerSabzi;
+      const raitaDiff = getRaitaPrice(raitaOpt) - getRaitaPrice(baseRaita);
+      const dessertDiff = getDessertPrice(dessertOpt) - getDessertPrice(baseDessert);
+      const satSpecialDiff = (satSpecial ? rules.saturdaySpecialPrice : 0) - (baseSaturday ? rules.saturdaySpecialPrice : 0);
+
+      basePlanPrice = planBasePrice + rotiDiff + sabziDiff + raitaDiff + dessertDiff + satSpecialDiff;
     }
+
+    const deliveryDaysCount = (customDetails.deliveryDays && Array.isArray(customDetails.deliveryDays) && customDetails.deliveryDays.length > 0)
+      ? customDetails.deliveryDays.length
+      : 6;
+
+    const finalPrice = basePlanPrice * (deliveryDaysCount / 6);
+    return Math.round(finalPrice * 100) / 100;
   }
 }
 

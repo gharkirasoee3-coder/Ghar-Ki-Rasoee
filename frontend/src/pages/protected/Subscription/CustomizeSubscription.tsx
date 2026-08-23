@@ -167,12 +167,14 @@ const CustomizeSubscription: React.FC = () => {
               if (dMenu.dessertOptions) dayPrefs.dessert = dMenu.dessertOptions[0];
             } else {
               // Standard sabzi selection
-              const numChoices = currentPlanType === 'custom' ? (specs?.sabziChoices || 2) : (currentPlanType === 'basic' ? 1 : 2);
+              const numChoices = currentPlanType === 'custom' ? (specs?.sabziChoices ?? 2) : (currentPlanType === 'basic' ? 1 : 2);
               
               const s1 = dMenu.sabziSet1 || dMenu.sabziOptions || [];
               const s2 = dMenu.sabziSet2 || [];
 
-              if (numChoices === 1) {
+              if (numChoices === 0) {
+                // No sabzi selected — nothing to initialize
+              } else if (numChoices === 1) {
                 dayPrefs.sabzi1 = s1[0] || '';
               } else if (numChoices === 2) {
                 dayPrefs.sabzi1 = s1[0] || '';
@@ -242,7 +244,7 @@ const CustomizeSubscription: React.FC = () => {
   };
 
   const getSabziCount = () => {
-    if (planType === 'custom') return customSpecs?.sabziChoices || 2;
+    if (planType === 'custom') return customSpecs?.sabziChoices ?? 2;
     if (planType === 'basic') return 1;
     return 2;
   };
@@ -331,6 +333,7 @@ const CustomizeSubscription: React.FC = () => {
       }
       
       const count = getSabziCount();
+      if (count === 0) return true;
       if (count === 1) return !!dayPrefs.sabzi1;
       if (count === 2) return !!(dayPrefs.sabzi1 && dayPrefs.sabzi2);
       return !!(dayPrefs.sabzi1 && dayPrefs.sabzi2 && dayPrefs.sabzi3);
@@ -398,7 +401,8 @@ const CustomizeSubscription: React.FC = () => {
                   isCompleteDay = !!(dayPrefs.specialFood && dayPrefs.dessert);
                 } else {
                   const count = getSabziCount();
-                  if (count === 1) isCompleteDay = !!dayPrefs.sabzi1;
+                  if (count === 0) isCompleteDay = true;
+                  else if (count === 1) isCompleteDay = !!dayPrefs.sabzi1;
                   else if (count === 2) isCompleteDay = !!(dayPrefs.sabzi1 && dayPrefs.sabzi2);
                   else isCompleteDay = !!(dayPrefs.sabzi1 && dayPrefs.sabzi2 && dayPrefs.sabzi3);
                 }
@@ -432,7 +436,9 @@ const CustomizeSubscription: React.FC = () => {
               <p className="text-text-secondary text-sm">
                 {isSaturdaySpecialActive() 
                   ? "It's Saturday Special! Customize your premium treat." 
-                  : `Please customize your ${getSabziCount()} daily sabzi choice(s) below.`
+                  : getSabziCount() === 0
+                    ? "Your plan has no sabzi included. You can still select raita/salad options below."
+                    : `Please customize your ${getSabziCount()} daily sabzi choice(s) below.`
                 }
               </p>
             </div>
@@ -491,6 +497,13 @@ const CustomizeSubscription: React.FC = () => {
             ) : (
               /* Regular Day Sabzi Selector */
               <div className="space-y-6">
+                {getSabziCount() === 0 && (
+                  <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
+                    <p className="text-gray-500 font-semibold">No sabzi included in your plan</p>
+                    <p className="text-xs text-gray-400 mt-1">Your custom plan does not include any daily sabzi selections.</p>
+                  </div>
+                )}
+
                 {/* 1 Sabzi Choice */}
                 {getSabziCount() === 1 && (
                   <div className="bg-primary/5 rounded-2xl p-6 border border-primary/10">

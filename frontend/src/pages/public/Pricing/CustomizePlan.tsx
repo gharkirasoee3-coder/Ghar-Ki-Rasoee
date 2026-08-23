@@ -5,6 +5,7 @@ import { ChevronLeft, Info, Sparkles, RefreshCw, ShoppingCart, Sliders } from 'l
 import { ENV } from '../../../config/env.config';
 import PageContainer from '../../../components/layout/PageContainer';
 import { toast } from 'sonner';
+import { useCity } from '../../../context/CityContext';
 
 interface CustomPricingConfig {
   basePrice: number;
@@ -29,6 +30,7 @@ const CustomizePlan: React.FC = () => {
   const [mode, setMode] = useState<'existing' | 'scratch'>('existing');
   const [basePlan, setBasePlan] = useState<'basic' | 'standard' | 'premium'>('standard');
   const [plans, setPlans] = useState<Record<string, PlanDetails>>({});
+  const { selectedCity } = useCity();
   
   // Custom Plan State
   const [roti, setRoti] = useState(8);
@@ -52,7 +54,10 @@ const CustomizePlan: React.FC = () => {
   useEffect(() => {
     const fetchPricing = async () => {
       try {
-        const res = await axios.get(`${ENV.API_URL}/menu/plans`);
+        setLoading(true);
+        const res = await axios.get(`${ENV.API_URL}/menu/plans`, {
+          params: { city: selectedCity }
+        });
         if (res.data.data.customPricingConfig) {
           setPricingConfig(res.data.data.customPricingConfig);
         }
@@ -67,7 +72,7 @@ const CustomizePlan: React.FC = () => {
       }
     };
     fetchPricing();
-  }, []);
+  }, [selectedCity]);
 
   // Set default specifications when switching modes or base plan
   useEffect(() => {
@@ -176,7 +181,7 @@ const CustomizePlan: React.FC = () => {
       price: totalPrice,
       features: [
         `${roti} Tawa Roti per delivery`,
-        `${sabziChoices} Sabzi choice(s) per delivery`,
+        sabziChoices === 0 ? 'No Sabzi' : `${sabziChoices} Sabzi choice(s) per delivery`,
         formattedRaita,
         formattedDessert,
         saturdaySpecial ? 'Saturday Special Food + Dessert' : 'No Saturday Special',
@@ -305,15 +310,15 @@ const CustomizePlan: React.FC = () => {
                 <input
                   type="range"
                   min="0"
-                  max="12"
+                  max="40"
                   step="2"
                   value={roti}
                   onChange={(e) => setRoti(Number(e.target.value))}
                   className="flex-1 accent-primary h-2 bg-gray-200 rounded-lg cursor-pointer"
                 />
                 <button
-                  onClick={() => setRoti(prev => Math.min(12, prev + 2))}
-                  disabled={roti >= 12}
+                  onClick={() => setRoti(prev => Math.min(40, prev + 2))}
+                  disabled={roti >= 40}
                   className="w-12 h-12 rounded-xl border border-gray-300 flex items-center justify-center font-bold text-xl hover:bg-gray-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   +
@@ -328,10 +333,10 @@ const CustomizePlan: React.FC = () => {
                   <label className="block text-base font-bold text-text-primary">Daily Sabzi Selection</label>
                   <span className="text-xs text-text-secondary">Choose how many distinct dishes you receive daily</span>
                 </div>
-                <span className="text-2xl font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full">{sabziChoices} Choices</span>
+                <span className="text-2xl font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full">{sabziChoices === 0 ? 'None' : `${sabziChoices} Choice${sabziChoices > 1 ? 's' : ''}`}</span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[1, 2, 3].map((choice) => (
+              <div className="grid grid-cols-4 gap-3">
+                {[0, 1, 2, 3].map((choice) => (
                   <button
                     key={choice}
                     onClick={() => setSabziChoices(choice)}
@@ -341,7 +346,7 @@ const CustomizePlan: React.FC = () => {
                         : 'border-gray-200 hover:border-gray-300 text-text-secondary'
                     }`}
                   >
-                    {choice} Sabzi{choice > 1 ? 's' : ''}
+                    {choice === 0 ? 'None' : `${choice} Sabzi${choice > 1 ? 's' : ''}`}
                   </button>
                 ))}
               </div>
@@ -454,7 +459,7 @@ const CustomizePlan: React.FC = () => {
 
               {/* Sabzi Choices Calc */}
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary font-medium">Daily Sabzi ({sabziChoices} choice{sabziChoices > 1 ? 's' : ''})</span>
+                <span className="text-text-secondary font-medium">Daily Sabzi ({sabziChoices === 0 ? 'None' : `${sabziChoices} choice${sabziChoices > 1 ? 's' : ''}`})</span>
                 {mode === 'scratch' ? (
                   <span className="font-bold text-text-primary">+${sabziChoices * pricingConfig.pricePerSabzi} CAD</span>
                 ) : (
