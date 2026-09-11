@@ -7,7 +7,7 @@ class OrderController {
   static async createOrder(req, res) {
     try {
       const { uid } = req.user;
-      const { orderType, plan, items, deliveryDate: rawDeliveryDate, couponCode } = req.body;
+      const { orderType, plan, items, deliveryDate: rawDeliveryDate, couponCode, customDetails, customerPhone, notes } = req.body;
 
       // Basic validation
       if (!orderType) {
@@ -96,11 +96,14 @@ class OrderController {
         userId: uid,
         customerName:
           userData.displayName || userData.email || "Unknown Customer",
+        customerPhone: customerPhone || userData.phone || null,
         deliveryAddress,
         city,
         orderType,
         plan: plan || null,
         items: items || {},
+        customDetails: customDetails || null,
+        notes: notes || null,
         price,
         deliveryFee,
         deliveryDate,

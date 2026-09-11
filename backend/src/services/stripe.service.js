@@ -47,6 +47,8 @@ class StripeService {
     customDetails,
     replacePlan,
     deliveryFee = 0,
+    customerPhone,
+    notes,
   }) {
     try {
       const customer = await this.createCustomer(userEmail, userName);
@@ -86,6 +88,8 @@ class StripeService {
           isRecurring: isSubscriptionMode ? "true" : "false",
           customDetails: customDetails ? JSON.stringify(customDetails) : "",
           replacePlan: replacePlan !== false ? "true" : "false",
+          customerPhone: customerPhone || "",
+          notes: notes || "",
         },
         success_url: successUrl,
         cancel_url: cancelUrl,

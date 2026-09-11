@@ -15,7 +15,7 @@ class PaymentController {
   static async createCheckoutSession(req, res) {
     try {
       const { uid, email } = req.user;
-      const { type, planName, amount, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan } = req.body;
+      const { type, planName, amount, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan, customerPhone, notes } = req.body;
 
       if (!amount || amount <= 0) {
         return ResponseUtil.error(res, 400, "Invalid amount");
@@ -135,6 +135,8 @@ class PaymentController {
         customDetails,
         replacePlan,
         deliveryFee,
+        customerPhone: customerPhone || userData.phone || null,
+        notes: notes || null,
       });
 
       return ResponseUtil.send(res, 200, "Checkout session created successfully", {
@@ -181,7 +183,7 @@ class PaymentController {
    * This is idempotent and can be safely called by webhook or success page.
    */
   static async fulfillCheckoutSession(session) {
-    const { userId, type, planName, deliveryAddress, city, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan } = session.metadata;
+    const { userId, type, planName, deliveryAddress, city, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan, customerPhone, notes } = session.metadata;
 
     console.log(`Fulfilling successful checkout session ${session.id} for user ${userId}, type ${type}`);
 
@@ -322,14 +324,24 @@ class PaymentController {
         console.error("Failed to parse items from metadata:", e);
       }
 
+      let parsedCustomDetails = null;
+      try {
+        parsedCustomDetails = customDetails ? JSON.parse(customDetails) : null;
+      } catch (e) {
+        console.error("Failed to parse customDetails from metadata:", e);
+      }
+
       const orderData = {
         userId,
         customerName: userData.displayName || userData.email || "Unknown Customer",
+        customerPhone: customerPhone || userData.phone || null,
         deliveryAddress,
         city: city || null,
         orderType: "one-time",
         plan: null,
         items: parsedItems,
+        customDetails: parsedCustomDetails,
+        notes: notes || null,
         price: session.amount_total / 100,
         deliveryDate,
         paymentMethod: "Stripe",

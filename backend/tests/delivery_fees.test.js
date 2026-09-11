@@ -264,4 +264,74 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       );
     });
   });
+
+  describe("City-Specific Delivery Fee Override", () => {
+    it("should use city-specific delivery fee ($25) for far cities instead of default ($15)", async () => {
+      const OrderModel = require("../src/models/order.model");
+      OrderModel.createOrder.mockResolvedValue({ orderId: "ord_city" });
+
+      // Return config with city-specific delivery settings
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+          cityCategories: {
+            far: {
+              deliveryFeeSettings: { minAmountForFreeDelivery: 200, deliveryFee: 25 },
+            },
+          },
+        }),
+      });
+
+      req.body = {
+        orderType: "one-time",
+        plan: "Meal",
+        items: [{ price: 50, quantity: 1 }],
+        deliveryAddress: "Toronto, ON",
+        city: "Toronto",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await OrderController.createOrder(req, res);
+
+      // Toronto is "far" per the mock, so $25 fee, total = 50 + 25 = 75
+      expect(OrderModel.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          price: 75,
+          deliveryFee: 25,
+        })
+      );
+    });
+  });
+
+  describe("Exact Threshold Boundary", () => {
+    it("should have free delivery when amount equals exact threshold ($150)", async () => {
+      const OrderModel = require("../src/models/order.model");
+      OrderModel.createOrder.mockResolvedValue({ orderId: "ord_boundary" });
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+        }),
+      });
+
+      req.body = {
+        orderType: "one-time",
+        plan: "Exactly At Threshold",
+        items: [{ price: 150, quantity: 1 }],
+        deliveryAddress: "123 Main St",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await OrderController.createOrder(req, res);
+
+      // $150 is NOT < $150, so no delivery fee
+      expect(OrderModel.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          price: 150,
+          deliveryFee: 0,
+        })
+      );
+    });
+  });
 });

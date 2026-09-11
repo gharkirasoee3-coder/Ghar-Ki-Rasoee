@@ -4,6 +4,16 @@ export interface OrderItem {
   quantity: number;
 }
 
+export interface OrderCustomDetails {
+  day?: number;
+  rotiCount?: number;
+  sabziSet1?: string;
+  sabziSet2?: string;
+  extraRaita?: boolean;
+  extraSweet?: boolean;
+  [key: string]: unknown;
+}
+
 export interface Order {
   orderId: string;
   userId: string;
@@ -12,6 +22,7 @@ export interface Order {
   status: 'Confirmed' | 'Cooking' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
   deliveryDate: string;
   deliveryAddress?: string;
+  city?: string;
   createdAt: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -19,4 +30,8 @@ export interface Order {
   plan?: string;
   customerName?: string;
   customerPhone?: string;
+  customDetails?: OrderCustomDetails | null;
+  notes?: string | null;
+  deliveryFee?: number;
+  couponCode?: string | null;
 }

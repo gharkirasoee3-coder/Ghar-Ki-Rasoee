@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PageContainer from '../../../components/layout/PageContainer';
-import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar } from 'lucide-react';
+import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar, Phone, MessageSquare } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
@@ -36,6 +36,8 @@ const SubscriptionCheckout: React.FC = () => {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [notes, setNotes] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
     discountType: 'percentage' | 'fixed';
@@ -226,11 +228,13 @@ const SubscriptionCheckout: React.FC = () => {
 
       const token = await user.getIdToken();
 
-      const customDetailsPayload = isOneTime ? undefined : {
-        ...(plan.customDetails || {}),
-        deliveryDays: selectedDays,
-        basePlan: plan.customDetails?.basePlan || plan.name
-      };
+      const customDetailsPayload = isOneTime 
+        ? (plan.customDetails || undefined) 
+        : {
+            ...(plan.customDetails || {}),
+            deliveryDays: selectedDays,
+            basePlan: plan.customDetails?.basePlan || plan.name
+          };
 
       if (paymentMethod === 'Stripe') {
         const response = await axios.post(
@@ -247,6 +251,8 @@ const SubscriptionCheckout: React.FC = () => {
             items: [{ name: plan.name, quantity: 1, price: getAdjustedPrice() }],
             replacePlan: chosenReplacePlan,
             deliveryFee,
+            customerPhone: customerPhone || undefined,
+            notes: notes || undefined,
           },
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -273,6 +279,9 @@ const SubscriptionCheckout: React.FC = () => {
               paymentStatus: 'Pending',
               couponCode: appliedCoupon ? appliedCoupon.code : undefined,
               deliveryFee,
+              customDetails: customDetailsPayload,
+              customerPhone: customerPhone || undefined,
+              notes: notes || undefined,
             },
             {
               headers: { Authorization: `Bearer ${token}` },
@@ -553,6 +562,40 @@ const SubscriptionCheckout: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Phone & Notes (for one-time orders) */}
+            {isOneTime && (
+              <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+                  <Phone className="text-primary" size={20} /> Contact & Notes
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">Helps our team coordinate your delivery.</p>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="e.g. +1 604-xxx-xxxx"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <MessageSquare size={12} /> Special Instructions (Optional)
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="e.g. Leave at door, extra spicy, no onion..."
+                    rows={2}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition resize-none"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Delivery Days Selection */}
             {!isOneTime && (
