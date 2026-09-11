@@ -6,8 +6,8 @@ import { Order } from '../../../types/order';
 import { 
   Search, MapPin, Trash2, DollarSign, CheckCircle2, Clock, 
   ChevronDown, Phone, MessageSquare, UtensilsCrossed,
-  Calendar, Package, CreditCard, ExternalLink, X,
-  AlertCircle, Sparkles, Check, ArrowUpRight
+  Calendar, Package, CreditCard, X,
+  AlertCircle, Check, ArrowUpRight
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -99,12 +99,6 @@ const AdminOrders: React.FC = () => {
     if (!order) return false;
     const method = (order.paymentMethod || '').toLowerCase();
     return (method.includes('cash') || method.includes('cod')) && order.paymentStatus !== 'Paid';
-  }, []);
-
-  const isCODPaid = useCallback((order: Order) => {
-    if (!order) return false;
-    const method = (order.paymentMethod || '').toLowerCase();
-    return (method.includes('cash') || method.includes('cod')) && order.paymentStatus === 'Paid';
   }, []);
 
   const isOneTimeOrder = useCallback((order: Order) => {
