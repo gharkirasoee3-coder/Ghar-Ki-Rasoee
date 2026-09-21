@@ -425,55 +425,66 @@ const MySubscription: React.FC = () => {
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((day) => {
-                            const prefs = customizations?.preferences?.[day] || {};
-                            const dayName = day.charAt(0).toUpperCase() + day.slice(1);
-                            const hasPrefs = !!(prefs.sabzi1 || prefs.sabzi2 || prefs.specialFood || prefs.dessert || prefs.sideOption);
-                            
-                            return (
-                              <div key={day} className="bg-white rounded-2xl p-5 border border-gray-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
-                                <div>
-                                  <h4 className="font-extrabold text-primary text-sm mb-3">{dayName}</h4>
-                                  <div className="space-y-2 text-xs font-semibold">
-                                    {prefs.sabzi1 && (
-                                      <p className="text-gray-700 flex items-center gap-1.5">
-                                        <span className="text-gray-400">•</span> {prefs.sabzi1}
-                                      </p>
-                                    )}
-                                    {prefs.sabzi2 && (
-                                      <p className="text-gray-700 flex items-center gap-1.5">
-                                        <span className="text-gray-400">•</span> {prefs.sabzi2}
-                                      </p>
-                                    )}
-                                    {prefs.specialFood && (
-                                      <p className="text-orange-700 font-bold flex items-center gap-1.5">
-                                        <span>🌟</span> {prefs.specialFood}
-                                      </p>
-                                    )}
-                                    {prefs.dessert && (
-                                      <p className="text-pink-700 font-bold flex items-center gap-1.5">
-                                        <span>🍮</span> {prefs.dessert}
-                                      </p>
-                                    )}
-                                    {!hasPrefs && (
-                                      <p className="text-gray-400 italic font-medium">Chef's Selection Rotation</p>
-                                    )}
+                          {(() => {
+                            const rawDeliveryDays = subscription.deliveryDays || subscription.planDetails?.deliveryDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            const normalizedDeliveryDays = Array.isArray(rawDeliveryDays) && rawDeliveryDays.length > 0
+                              ? rawDeliveryDays.map((d: string) => d.toLowerCase())
+                              : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+                            const activeWeeklyDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].filter((d) =>
+                              normalizedDeliveryDays.includes(d)
+                            );
+
+                            return activeWeeklyDays.map((day) => {
+                              const prefs = customizations?.preferences?.[day] || {};
+                              const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                              const hasPrefs = !!(prefs.sabzi1 || prefs.sabzi2 || prefs.specialFood || prefs.dessert || prefs.sideOption);
+                              
+                              return (
+                                <div key={day} className="bg-white rounded-2xl p-5 border border-gray-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+                                  <div>
+                                    <h4 className="font-extrabold text-primary text-sm mb-3">{dayName}</h4>
+                                    <div className="space-y-2 text-xs font-semibold">
+                                      {prefs.sabzi1 && (
+                                        <p className="text-gray-700 flex items-center gap-1.5">
+                                          <span className="text-gray-400">•</span> {prefs.sabzi1}
+                                        </p>
+                                      )}
+                                      {prefs.sabzi2 && (
+                                        <p className="text-gray-700 flex items-center gap-1.5">
+                                          <span className="text-gray-400">•</span> {prefs.sabzi2}
+                                        </p>
+                                      )}
+                                      {prefs.specialFood && (
+                                        <p className="text-orange-700 font-bold flex items-center gap-1.5">
+                                          <span>🌟</span> {prefs.specialFood}
+                                        </p>
+                                      )}
+                                      {prefs.dessert && (
+                                        <p className="text-pink-700 font-bold flex items-center gap-1.5">
+                                          <span>🍮</span> {prefs.dessert}
+                                        </p>
+                                      )}
+                                      {!hasPrefs && (
+                                        <p className="text-gray-400 italic font-medium">Chef's Selection Rotation</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="mt-4 pt-3.5 border-t border-gray-100 flex items-center justify-between">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Side Dish</span>
+                                    <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase border ${
+                                      prefs.sideOption === 'Salad' 
+                                        ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                        : 'bg-teal-50/50 text-teal-700 border-teal-150'
+                                    }`}>
+                                      {prefs.sideOption === 'Salad' ? '🥗 Salad' : '🥣 Raita'}
+                                    </span>
                                   </div>
                                 </div>
-                                
-                                <div className="mt-4 pt-3.5 border-t border-gray-100 flex items-center justify-between">
-                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Side Dish</span>
-                                  <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase border ${
-                                    prefs.sideOption === 'Salad' 
-                                      ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                                      : 'bg-teal-50/50 text-teal-700 border-teal-150'
-                                  }`}>
-                                    {prefs.sideOption === 'Salad' ? '🥗 Salad' : '🥣 Raita'}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
                       </div>
                     )}
@@ -491,8 +502,20 @@ const MySubscription: React.FC = () => {
                 </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-2 border-b">
-                    <span className="text-text-secondary">Days</span>
-                    <span className="font-medium">Mon - Sat</span>
+                    <span className="text-text-secondary">Delivery Days</span>
+                    <span className="font-semibold text-primary text-right max-w-[170px]">
+                      {(() => {
+                        const rawDeliveryDays = subscription.deliveryDays || subscription.planDetails?.deliveryDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        const normalizedDeliveryDays = Array.isArray(rawDeliveryDays) && rawDeliveryDays.length > 0
+                          ? rawDeliveryDays.map((d: string) => d.toLowerCase())
+                          : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                        const activeDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].filter((d) =>
+                          normalizedDeliveryDays.includes(d)
+                        );
+                        if (activeDays.length === 6) return 'Mon - Sat (6 Days)';
+                        return activeDays.map(d => d.charAt(0).toUpperCase() + d.slice(1, 3)).join(', ');
+                      })()}
+                    </span>
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-text-secondary">Delivery Time</span>

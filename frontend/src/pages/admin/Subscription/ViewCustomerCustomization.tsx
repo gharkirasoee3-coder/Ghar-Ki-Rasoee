@@ -214,7 +214,7 @@ const ViewCustomerCustomization: React.FC = () => {
             const dayMenu = weeklyMenu[day as keyof typeof weeklyMenu] as DayMenu;
             const dayPrefs = preferences[day] || {};
             
-            const isDeliveryDay = !customerInfo || !customerInfo.deliveryDays || customerInfo.deliveryDays.includes(day);
+            const isDeliveryDay = !customerInfo || !customerInfo.deliveryDays || !Array.isArray(customerInfo.deliveryDays) || customerInfo.deliveryDays.some((d: string) => d.toLowerCase() === day.toLowerCase());
 
             const isSatSpecial = dayMenu.isSaturdaySpecial && 
               (planType === 'premium' || (planType === 'custom' && customSpecs?.saturdaySpecial));

@@ -124,9 +124,9 @@ const SubscriptionCheckout: React.FC = () => {
         });
         const subs = res.data.data;
         if (Array.isArray(subs)) {
-          const active = subs.some((s: any) => s.status === 'Active');
+          const active = subs.some((s: { status?: string }) => s.status === 'Active');
           if (active) setHasActiveSub(true);
-        } else if (subs && subs.status === 'Active') {
+        } else if (subs && (subs as { status?: string }).status === 'Active') {
           setHasActiveSub(true);
         }
       } catch (err) {
@@ -172,9 +172,9 @@ const SubscriptionCheckout: React.FC = () => {
           setLegalConsent(true);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setCouponError(err.response?.data?.message || 'Invalid or expired coupon code');
+      setCouponError(axios.isAxiosError(err) ? err.response?.data?.message || 'Invalid or expired coupon code' : 'Invalid or expired coupon code');
       setAppliedCoupon(null);
     } finally {
       setValidatingCoupon(false);
@@ -325,9 +325,14 @@ const SubscriptionCheckout: React.FC = () => {
           }
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Checkout error:", err);
-      setError(err.response?.data?.message || err.message || "Failed to process request");
+      const msg = axios.isAxiosError(err)
+        ? err.response?.data?.message || err.message
+        : err instanceof Error
+        ? err.message
+        : "Failed to process request";
+      setError(msg);
       setLoading(false);
     }
   };
@@ -352,25 +357,25 @@ const SubscriptionCheckout: React.FC = () => {
   };
 
   return (
-    <PageContainer className="py-12">
+    <PageContainer className="py-6 sm:py-10 md:py-12 px-3 sm:px-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-8 text-center tracking-tight">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 mb-6 sm:mb-8 text-center tracking-tight px-2">
           {isOneTime ? 'Ready for a One-Time Meal?' : 'Complete Your Subscription'}
         </h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
           {/* Plan Summary Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-xl sticky top-24">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Order Summary</h2>
-              <div className="p-5 bg-gradient-to-br from-primary/5 to-orange-50 rounded-2xl mb-6">
+          <div className="lg:col-span-1 order-2 lg:order-1">
+            <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl lg:sticky lg:top-24">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Order Summary</h2>
+              <div className="p-4 sm:p-5 bg-gradient-to-br from-primary/5 to-orange-50 rounded-2xl mb-5">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="font-bold text-lg text-gray-800">{plan.name}</span>
-                  <span className="font-extrabold text-xl text-primary">
+                  <span className="font-bold text-base sm:text-lg text-gray-800">{plan.name}</span>
+                  <span className="font-extrabold text-lg sm:text-xl text-primary">
                     {isOneTime ? `$${plan.price}` : `$${getAdjustedPrice()}/mo`}
                   </span>
                 </div>
-                <ul className="space-y-2.5 text-sm text-gray-600 mt-4">
+                <ul className="space-y-2 text-xs sm:text-sm text-gray-600 mt-3">
                   {plan.features.map((f: string, i: number) => (
                     <li key={i} className="flex items-start gap-2">
                       <Check size={16} className="text-green-500 shrink-0 mt-0.5" />
@@ -380,7 +385,7 @@ const SubscriptionCheckout: React.FC = () => {
                 </ul>
               </div>
               {/* Promo Code Input */}
-              <div className="border-t border-gray-100 pt-4 mt-4">
+              <div className="border-t border-gray-100 pt-4 mt-2">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Promo / Coupon Code
                 </label>
@@ -389,7 +394,7 @@ const SubscriptionCheckout: React.FC = () => {
                     <input
                       type="text"
                       placeholder="Enter code"
-                      className="w-full pl-3 pr-20 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full pl-3 pr-20 py-2.5 border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/20"
                       value={couponInput}
                       onChange={(e) => {
                         setCouponInput(e.target.value);
@@ -400,7 +405,7 @@ const SubscriptionCheckout: React.FC = () => {
                       type="button"
                       onClick={handleApplyCoupon}
                       disabled={!couponInput || validatingCoupon}
-                      className="absolute right-1 px-4 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition disabled:opacity-50"
+                      className="absolute right-1 px-3.5 sm:px-4 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition disabled:opacity-50"
                     >
                       {validatingCoupon ? '...' : 'Apply'}
                     </button>
@@ -438,7 +443,7 @@ const SubscriptionCheckout: React.FC = () => {
                 )}
 
                 {appliedCoupon && appliedCoupon.duration === 'repeating' && (
-                  <div className="mt-4 p-4 bg-orange-50 border border-orange-200/60 rounded-2xl space-y-3">
+                  <div className="mt-4 p-3.5 bg-orange-50 border border-orange-200/60 rounded-2xl space-y-3">
                     <div className="flex items-start gap-2.5">
                       <AlertTriangle className="text-orange-500 shrink-0 mt-0.5" size={18} />
                       <div>
@@ -486,19 +491,19 @@ const SubscriptionCheckout: React.FC = () => {
               </div>
 
               <div className="border-t border-gray-100 pt-4 mt-4 space-y-2">
-                <div className="flex justify-between items-center text-sm text-gray-600">
+                <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
                   <span>Subtotal</span>
                   <span className="font-semibold">${getAdjustedPrice().toFixed(2)} CAD</span>
                 </div>
 
                 {appliedCoupon && (
-                  <div className="flex justify-between items-center text-sm font-semibold text-green-600">
+                  <div className="flex justify-between items-center text-xs sm:text-sm font-semibold text-green-600">
                     <span>Discount ({appliedCoupon.code})</span>
                     <span>-${discountAmount.toFixed(2)} CAD</span>
                   </div>
                 )}
 
-                <div className="flex justify-between items-center text-sm text-gray-600">
+                <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
                   <span>Delivery Fee</span>
                   {deliveryFee > 0 ? (
                     <span className="font-semibold text-orange-600">+${deliveryFee.toFixed(2)} CAD</span>
@@ -514,62 +519,65 @@ const SubscriptionCheckout: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex justify-between items-center font-bold text-lg border-t pt-4 mt-4">
+              <div className="flex justify-between items-center font-bold text-base sm:text-lg border-t pt-4 mt-4">
                 <span className="text-gray-700">Total</span>
-                <span className="text-xl text-gray-950">
+                <span className="text-lg sm:text-xl text-gray-950 font-black">
                   ${totalAmount.toFixed(2)} CAD
                 </span>
               </div>
 
               {appliedCoupon && appliedCoupon.duration === 'repeating' && (
                 <p className="text-[10px] text-gray-400 font-bold text-right mt-1.5 leading-snug">
-                  Charges automatically renew at ${getAdjustedPrice().toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
+                  Charges automatically renew at ${(getAdjustedPrice() + deliveryFee).toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
                 </p>
               )}
             </div>
           </div>
 
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-5 sm:space-y-6 order-1 lg:order-2">
             {/* Delivery Address */}
-            <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin className="text-primary" /> Delivery Address
+            <div className="bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 flex items-center gap-2">
+                <MapPin className="text-primary shrink-0" size={20} /> Delivery Address
               </h2>
               
               {!address ? (
                 <button 
                   onClick={() => setIsLocationPickerOpen(true)}
-                  className="w-full py-6 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 hover:border-primary hover:text-primary transition-all duration-300 flex flex-col items-center gap-2 group"
+                  className="w-full py-6 sm:py-8 border-2 border-dashed border-primary/30 bg-primary/5 rounded-2xl text-gray-700 hover:border-primary hover:bg-primary/10 transition-all duration-300 flex flex-col items-center justify-center gap-2.5 group cursor-pointer"
                 >
-                  <MapPin size={32} className="group-hover:scale-110 transition-transform" />
-                  <span className="font-semibold text-sm">Select Delivery Location on Map</span>
+                  <div className="p-3 bg-white text-primary rounded-full shadow-md group-hover:scale-110 transition-transform">
+                    <MapPin size={24} />
+                  </div>
+                  <div className="text-center px-4">
+                    <span className="font-bold text-sm text-gray-900 block">Select Delivery Location on Interactive Map</span>
+                    <span className="text-xs text-gray-500 mt-0.5 block">Search your address or pinpoint your exact home on map</span>
+                  </div>
                 </button>
               ) : (
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200/60">
-                  <div className="flex justify-between items-start">
-                    <div className="max-w-[80%]">
-                      <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Delivering To</p>
-                      <p className="text-gray-800 font-medium leading-relaxed">{address}</p>
-                    </div>
-                    <button 
-                      onClick={() => setIsLocationPickerOpen(true)}
-                      className="text-primary text-sm font-bold hover:underline"
-                    >
-                      Change
-                    </button>
+                <div className="p-4 sm:p-5 bg-gray-50/80 rounded-2xl border border-gray-200/70 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Delivering To</p>
+                    <p className="text-gray-900 font-semibold text-xs sm:text-sm leading-relaxed break-words">{address}</p>
                   </div>
+                  <button 
+                    onClick={() => setIsLocationPickerOpen(true)}
+                    className="shrink-0 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs sm:text-sm font-bold rounded-xl transition"
+                  >
+                    Change Map Pin
+                  </button>
                 </div>
               )}
             </div>
 
             {/* Phone & Notes (for one-time orders) */}
             {isOneTime && (
-              <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
-                <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
-                  <Phone className="text-primary" size={20} /> Contact & Notes
+              <div className="bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+                  <Phone className="text-primary shrink-0" size={20} /> Contact & Notes
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">Helps our team coordinate your delivery.</p>
+                <p className="text-xs sm:text-sm text-gray-500 mb-4">Helps our team coordinate your delivery smoothly.</p>
                 
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
@@ -578,7 +586,7 @@ const SubscriptionCheckout: React.FC = () => {
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="e.g. +1 604-xxx-xxxx"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
+                    className="w-full px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                   />
                 </div>
 
@@ -591,7 +599,7 @@ const SubscriptionCheckout: React.FC = () => {
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="e.g. Leave at door, extra spicy, no onion..."
                     rows={2}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition resize-none"
+                    className="w-full px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition resize-none"
                   />
                 </div>
               </div>
@@ -599,14 +607,14 @@ const SubscriptionCheckout: React.FC = () => {
 
             {/* Delivery Days Selection */}
             {!isOneTime && (
-              <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Calendar className="text-primary" size={22} /> Delivery Schedule
+              <div className="bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Calendar className="text-primary shrink-0" size={22} /> Delivery Schedule
                 </h2>
-                <p className="text-sm text-gray-500 leading-relaxed">
+                <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
                   Choose which days of the week you would like to receive deliveries. The price of your subscription scales dynamically based on the frequency.
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-2">
                   {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((day) => {
                     const isSelected = selectedDays.includes(day);
                     return (
@@ -620,7 +628,7 @@ const SubscriptionCheckout: React.FC = () => {
                             setSelectedDays([...selectedDays, day]);
                           }
                         }}
-                        className={`py-3 px-4 rounded-xl border-2 font-semibold text-sm transition-all duration-200 capitalize flex items-center justify-between ${
+                        className={`py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl border-2 font-semibold text-xs sm:text-sm transition-all duration-200 capitalize flex items-center justify-between ${
                           isSelected
                             ? 'border-primary bg-primary/5 text-primary shadow-sm shadow-primary/5'
                             : 'border-gray-100 hover:border-gray-200 text-gray-600'
@@ -628,9 +636,9 @@ const SubscriptionCheckout: React.FC = () => {
                       >
                         <span>{day}</span>
                         {isSelected ? (
-                          <Check size={16} className="text-primary" />
+                          <Check size={16} className="text-primary shrink-0" />
                         ) : (
-                          <div className="w-4 h-4 rounded-full border border-gray-300" />
+                          <div className="w-4 h-4 rounded-full border border-gray-300 shrink-0" />
                         )}
                       </button>
                     );
@@ -641,8 +649,8 @@ const SubscriptionCheckout: React.FC = () => {
                     <AlertCircle size={14} /> Please select at least one delivery day.
                   </p>
                 )}
-                <p className="text-xs text-gray-400 font-medium bg-gray-50 p-3 rounded-xl border border-gray-200/50 mt-3">
-                  💡 <strong>Tip:</strong> If you select fewer days, your monthly billing will decrease proportionally. Your meal options/customizations will apply to the days you select.
+                <p className="text-[11px] sm:text-xs text-gray-400 font-medium bg-gray-50 p-3 rounded-xl border border-gray-200/50 mt-3">
+                  💡 <strong>Tip:</strong> If you select fewer days, your monthly billing will decrease proportionally.
                 </p>
               </div>
             )}
@@ -763,11 +771,11 @@ const SubscriptionCheckout: React.FC = () => {
                           I authorize Ghar Ki Rasoee to save my payment details and automatically charge my card{" "}
                           {appliedCoupon && appliedCoupon.duration === 'repeating' ? (
                             <span className="font-semibold text-gray-900">
-                              ${appliedCoupon.finalAmount.toFixed(2)} CAD for the first {appliedCoupon.durationInMonths} month(s), and then ${plan.price.toFixed(2)} CAD
+                              ${totalAmount.toFixed(2)} CAD for the first {appliedCoupon.durationInMonths} month(s), and then ${(getAdjustedPrice() + deliveryFee).toFixed(2)} CAD
                             </span>
                           ) : (
                             <span className="font-semibold text-gray-900">
-                              ${(appliedCoupon ? appliedCoupon.finalAmount : plan.price).toFixed(2)} CAD
+                              ${totalAmount.toFixed(2)} CAD
                             </span>
                           )}{" "}
                           on a monthly recurring basis until cancelled. I can cancel or pause my auto-renewal subscription at any time from my account dashboard.
@@ -810,11 +818,11 @@ const SubscriptionCheckout: React.FC = () => {
                   <span className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></span>
                 ) : isOneTime ? (
                   paymentMethod === 'Stripe'
-                    ? `Pay $${(appliedCoupon ? appliedCoupon.finalAmount : plan.price).toFixed(2)} CAD`
+                    ? `Pay $${totalAmount.toFixed(2)} CAD`
                     : 'Place Order (COD)'
                 ) : (
                   paymentMethod === 'Stripe' 
-                    ? `Pay $${(appliedCoupon ? appliedCoupon.finalAmount : plan.price).toFixed(2)} CAD` 
+                    ? `Pay $${totalAmount.toFixed(2)} CAD` 
                     : 'Confirm Subscription (COD)'
                 )}
               </button>

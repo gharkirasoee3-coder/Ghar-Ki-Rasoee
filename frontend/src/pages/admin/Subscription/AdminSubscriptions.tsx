@@ -217,13 +217,19 @@ const AdminSubscriptions: React.FC = () => {
         {filteredSubscriptions.map((sub) => (
           <div key={sub.subscriptionId} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
              <div className="flex justify-between items-start mb-3">
-                <div>
-                   <h3 className="font-semibold text-gray-900">{sub.userName || 'Unknown User'}</h3>
-                   {sub.userPhone && sub.userPhone !== "N/A" && (
+                 <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {sub.userName && sub.userName !== 'Unknown User' 
+                        ? sub.userName 
+                        : (sub.userEmail ? sub.userEmail.split('@')[0] : `Customer (${sub.userId ? sub.userId.slice(0, 8) : 'N/A'})`)}
+                    </h3>
+                    {sub.userPhone && sub.userPhone !== "N/A" ? (
                       <p className="text-xs text-gray-500 font-medium">{sub.userPhone}</p>
-                   )}
-                   <span className="text-xs text-gray-400">ID: {sub.subscriptionId.slice(0, 8)}</span>
-                </div>
+                    ) : (
+                      sub.userEmail && <p className="text-xs text-gray-400 font-medium">{sub.userEmail}</p>
+                    )}
+                    <span className="text-xs text-gray-400">ID: {sub.subscriptionId.slice(0, 8)}</span>
+                 </div>
                 <StatusBadge status={sub.status} />
              </div>
 
@@ -242,7 +248,7 @@ const AdminSubscriptions: React.FC = () => {
                            fri: 'friday',
                            sat: 'saturday'
                          };
-                         const active = sub.deliveryDays?.includes(dLong[dShort]);
+                          const active = sub.deliveryDays?.some((d: string) => d.toLowerCase() === dLong[dShort]);
                          return (
                            <span
                              key={dShort}
@@ -343,9 +349,15 @@ const AdminSubscriptions: React.FC = () => {
                 <tr key={sub.subscriptionId} className="hover:bg-gray-50/50 transition">
                   <td className="p-4">
                     <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-gray-900">{sub.userName || `UID: ${sub.userId.slice(0, 8)}...`}</span>
-                      {sub.userPhone && sub.userPhone !== "N/A" && (
+                      <span className="text-sm font-semibold text-gray-900">
+                        {sub.userName && sub.userName !== 'Unknown User' 
+                          ? sub.userName 
+                          : (sub.userEmail ? sub.userEmail.split('@')[0] : `Customer (${sub.userId ? sub.userId.slice(0, 8) : 'N/A'})`)}
+                      </span>
+                      {sub.userPhone && sub.userPhone !== "N/A" ? (
                         <span className="text-xs text-gray-500 font-medium">{sub.userPhone}</span>
+                      ) : (
+                        sub.userEmail && <span className="text-xs text-gray-400">{sub.userEmail}</span>
                       )}
                       <span className="text-xs text-gray-400">ID: {sub.subscriptionId.slice(0, 8)}...</span>
                     </div>
@@ -364,7 +376,7 @@ const AdminSubscriptions: React.FC = () => {
                               fri: 'friday',
                               sat: 'saturday'
                             };
-                            const active = sub.deliveryDays?.includes(dLong[dShort]);
+                            const active = sub.deliveryDays?.some((d: string) => d.toLowerCase() === dLong[dShort]);
                             return (
                               <span
                                 key={dShort}

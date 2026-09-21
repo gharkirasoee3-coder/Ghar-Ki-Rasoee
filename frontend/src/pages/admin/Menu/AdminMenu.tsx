@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
 import { ENV } from '../../../config/env.config';
 import { toast } from 'sonner';
-import { Save, RefreshCw, Layers, Calendar, DollarSign, Sliders, ShieldCheck, Image } from 'lucide-react';
+import { Save, RefreshCw, Layers, Calendar, Sliders, ShieldCheck, Image } from 'lucide-react';
 
 interface PlanConfig {
   name: string;
@@ -184,13 +184,6 @@ const AdminMenu: React.FC = () => {
   };
 
   // State update handlers
-  const updatePlanPrice = (planKey: string, price: number) => {
-    if (!config) return;
-    const updated = { ...config };
-    updated.plans[planKey].price = price;
-    setConfig(updated);
-  };
-
   const updatePlanFeaturesArray = (planKey: string, newFeatures: string[]) => {
     if (!config) return;
     const updated = { ...config };
@@ -201,6 +194,18 @@ const AdminMenu: React.FC = () => {
   const updatePricingRule = (key: keyof CustomPricingRules, value: number) => {
     if (!config) return;
     const updated = { ...config };
+    if (!updated.customPricingConfig) {
+      updated.customPricingConfig = {
+        basePrice: 100,
+        pricePerRoti: 5,
+        pricePerSabzi: 20,
+        raitaPrice3Days: 10,
+        raitaPriceDaily: 20,
+        dessertPriceWeekly: 10,
+        dessertPriceDaily: 30,
+        saturdaySpecialPrice: 15
+      };
+    }
     updated.customPricingConfig[key] = value;
     setConfig(updated);
   };
@@ -379,8 +384,8 @@ const AdminMenu: React.FC = () => {
           }`}
         >
           <span className="flex items-center gap-2">
-            <DollarSign size={18} />
-            Plan Pricing & Customization Rules
+            <Layers size={18} />
+            Subscription Tiers & Features
           </span>
           {activeTab === 'pricing' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-full"></div>}
         </button>
@@ -424,368 +429,177 @@ const AdminMenu: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'pricing' ? (
-        <div className="grid md:grid-cols-12 gap-8 items-start">
-          {/* Base Plan Pricing */}
-          <div className="md:col-span-7 space-y-6">
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 md:p-8 space-y-6 shadow-sm">
-              <div className="border-b border-slate-100 pb-4">
+        <div className="space-y-6">
+          {/* Base Plan Features Manager */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 md:p-8 space-y-6 shadow-sm">
+            <div className="border-b border-slate-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
                 <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
                   <Layers className="text-primary" />
-                  Subscription Tiers Manager
+                  Subscription Tiers & Features
                 </h2>
-                <p className="text-slate-500 text-xs mt-1">Configure base prices and customer-facing features for standard plan tiers.</p>
+                <p className="text-slate-500 text-xs mt-1">
+                  Configure customer-facing feature bullet points for standard and customizable plan tiers. Plan pricing is managed per city category in the &quot;City Pricing &amp; Delivery&quot; tab.
+                </p>
               </div>
-
-              <div className="space-y-8">
-                {['basic', 'standard', 'premium', 'customizable'].map((planKey) => {
-                  const plan = config.plans[planKey];
-                  if (!plan) return null;
-                  const isCustomizable = planKey === 'customizable';
-                  
-                  return (
-                    <div 
-                      key={planKey} 
-                      className={`p-6 rounded-3xl space-y-5 transition-all duration-300 border-2 hover:shadow-lg ${
-                        planKey === 'premium' ? 'bg-gradient-to-br from-purple-50/50 via-indigo-50/10 to-slate-50/30 border-purple-205 shadow-sm shadow-purple-100/30 hover:border-purple-350' :
-                        planKey === 'standard' ? 'bg-gradient-to-br from-blue-50/40 via-indigo-50/10 to-slate-50/30 border-blue-205 shadow-sm shadow-blue-100/30 hover:border-blue-350' :
-                        planKey === 'customizable' ? 'bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-yellow-50/30 border-amber-300 shadow-md shadow-amber-100/60 hover:border-amber-400' :
-                        'bg-gradient-to-br from-emerald-50/40 via-teal-50/10 to-slate-50/30 border-emerald-205 shadow-sm shadow-emerald-100/30 hover:border-emerald-350'
-                      }`}
-                    >
-                      {/* Plan Header */}
-                      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 ${
-                        planKey === 'premium' ? 'border-purple-100' :
-                        planKey === 'standard' ? 'border-blue-100' :
-                        planKey === 'customizable' ? 'border-amber-200' :
-                        'border-emerald-100'
-                      }`}>
-                        <div className="flex items-center gap-3">
-                          <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                            planKey === 'premium' ? 'bg-purple-100 text-purple-700' :
-                            planKey === 'standard' ? 'bg-blue-100 text-blue-700' : 
-                            planKey === 'customizable' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm shadow-amber-250' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {isCustomizable ? '★' : planKey.charAt(0).toUpperCase()}
-                          </span>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-extrabold text-slate-800 capitalize text-sm">
-                                {isCustomizable ? 'Highly Flexible' : `${planKey} Plan`}
-                              </h3>
-                              {planKey === 'premium' && (
-                                <span className="bg-purple-100 border border-purple-200 text-purple-750 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                                  Top Tier
-                                </span>
-                              )}
-                              {planKey === 'standard' && (
-                                <span className="bg-blue-100 border border-blue-200 text-blue-750 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                                  Most Popular
-                                </span>
-                              )}
-                              {planKey === 'basic' && (
-                                <span className="bg-emerald-105 border border-emerald-200 text-emerald-750 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                                  Essential
-                                </span>
-                              )}
-                              {isCustomizable && (
-                                <span className="bg-amber-100 border border-amber-250 text-amber-850 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm animate-pulse">
-                                  Custom Builder
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-450 font-semibold">
-                              {isCustomizable ? 'Build Your Own Plan (Base customizable price)' : 'Define price and features visible to users'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Price Input with Prefix/Suffix */}
-                        <div className="w-full sm:w-44 space-y-1">
-                          <label className="block text-[10px] font-black text-slate-455 uppercase tracking-wider">
-                            {isCustomizable ? 'Base Setup Price' : 'Base Price'}
-                          </label>
-                          <div className="relative flex items-center">
-                            <span className="absolute left-3.5 text-slate-400 font-extrabold text-sm">$</span>
-                            <input
-                              type="number"
-                              value={plan.price}
-                              onChange={(e) => updatePlanPrice(planKey, Number(e.target.value))}
-                              className={`pl-7 pr-12 py-2 w-full border rounded-xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 bg-white transition-all duration-200 ${
-                                planKey === 'premium' ? 'border-purple-200 focus:ring-purple-500/20 focus:border-purple-400' :
-                                planKey === 'standard' ? 'border-blue-200 focus:ring-blue-500/20 focus:border-blue-400' :
-                                planKey === 'customizable' ? 'border-amber-250 focus:ring-amber-500/20 focus:border-amber-400' :
-                                'border-emerald-200 focus:ring-emerald-500/20 focus:border-emerald-400'
-                              }`}
-                            />
-                            <span className="absolute right-3 text-slate-400 font-bold text-[10px] uppercase">CAD</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Plan Features */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">Features list</label>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            planKey === 'premium' ? 'bg-purple-100 text-purple-750' :
-                            planKey === 'standard' ? 'bg-blue-100 text-blue-755' :
-                            planKey === 'customizable' ? 'bg-amber-100 text-amber-850' :
-                            'bg-emerald-100 text-emerald-755'
-                          }`}>
-                            {plan.features.length} Items
-                          </span>
-                        </div>
-                        <div className="space-y-2">
-                          {plan.features.map((feature, idx) => (
-                            <div key={idx} className="flex gap-2.5 items-center group">
-                              <span className={`w-6 h-6 rounded-lg text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                                planKey === 'premium' ? 'bg-purple-100 text-purple-700' :
-                                planKey === 'standard' ? 'bg-blue-100 text-blue-700' :
-                                planKey === 'customizable' ? 'bg-amber-200/60 text-amber-850' :
-                                'bg-emerald-100 text-emerald-700'
-                              }`}>
-                                {idx + 1}
-                              </span>
-                              <input
-                                type="text"
-                                value={feature}
-                                onChange={(e) => {
-                                  const newFeatures = [...plan.features];
-                                  newFeatures[idx] = e.target.value;
-                                  updatePlanFeaturesArray(planKey, newFeatures);
-                                }}
-                                className={`px-3.5 py-2.5 text-xs font-semibold w-full border rounded-xl focus:outline-none focus:ring-2 bg-white transition-all duration-200 ${
-                                  planKey === 'premium' ? 'border-purple-250 focus:ring-purple-500/20 focus:border-purple-400' :
-                                  planKey === 'standard' ? 'border-blue-250 focus:ring-blue-500/20 focus:border-blue-400' :
-                                  planKey === 'customizable' ? 'border-amber-250 focus:ring-amber-500/20 focus:border-amber-400' :
-                                  'border-emerald-250 focus:ring-emerald-500/20 focus:border-emerald-400'
-                                }`}
-                                placeholder={isCustomizable ? `Custom feature #${idx + 1}` : `e.g. ${idx === 0 ? '4 Tawa Roti' : idx === 1 ? '1 Sabzi' : 'Fresh ingredients'}`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newFeatures = plan.features.filter((_, i) => i !== idx);
-                                  updatePlanFeaturesArray(planKey, newFeatures);
-                                }}
-                                className={`p-1.5 rounded-lg transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 ${
-                                  planKey === 'premium' ? 'text-purple-500 hover:text-red-650 hover:bg-purple-100/50' :
-                                  planKey === 'standard' ? 'text-blue-500 hover:text-red-650 hover:bg-blue-100/50' :
-                                  planKey === 'customizable' ? 'text-amber-500 hover:text-red-650 hover:bg-amber-100/50' :
-                                  'text-emerald-500 hover:text-red-650 hover:bg-emerald-100/50'
-                                }`}
-                                title="Remove feature"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newFeatures = [...plan.features, ""];
-                            updatePlanFeaturesArray(planKey, newFeatures);
-                          }}
-                          className={`text-xs font-bold flex items-center gap-1 mt-1 transition ${
-                            planKey === 'premium' ? 'text-purple-700 hover:text-purple-855' :
-                            planKey === 'standard' ? 'text-blue-700 hover:text-blue-855' :
-                            planKey === 'customizable' ? 'text-amber-700 hover:text-amber-855' :
-                            'text-emerald-700 hover:text-emerald-855'
-                          }`}
-                        >
-                          + Add Feature Field
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('cities')}
+                className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-xl transition flex items-center gap-2 w-fit shrink-0"
+              >
+                <Sliders size={14} />
+                Manage City Pricing &amp; Delivery →
+              </button>
             </div>
-          </div>
 
-          {/* Customization Rules */}
-          <div className="md:col-span-5 space-y-6">
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 md:p-8 space-y-6 shadow-sm">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                  <Sliders className="text-primary" />
-                  Custom Plan Pricing Engine
-                </h2>
-                <p className="text-slate-500 text-xs mt-1">Configure live pricing rules and add-on rates used to calculate customizable subscriptions.</p>
-              </div>
-
-              <div className="space-y-6">
-                {/* Core pricing parameters */}
-                <div className="space-y-3.5">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-l-2 border-primary pl-2">Core Pricing Parameters</h4>
-                  
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Base Customizable Price</label>
-                      <div className="relative flex items-center">
-                        <span className="absolute left-3.5 text-slate-450 font-extrabold text-sm">$</span>
-                        <input
-                          type="number"
-                          value={config.customPricingConfig.basePrice}
-                          onChange={(e) => updatePricingRule('basePrice', Number(e.target.value))}
-                          className="pl-7 pr-12 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                        <span className="absolute right-3.5 text-slate-450 font-bold text-[10px] uppercase">CAD/mo</span>
+            <div className="grid md:grid-cols-2 gap-6">
+              {['basic', 'standard', 'premium', 'customizable'].map((planKey) => {
+                const plan = config.plans[planKey];
+                if (!plan) return null;
+                const isCustomizable = planKey === 'customizable';
+                
+                return (
+                  <div 
+                    key={planKey} 
+                    className={`p-6 rounded-3xl space-y-5 transition-all duration-300 border-2 hover:shadow-lg ${
+                      planKey === 'premium' ? 'bg-gradient-to-br from-purple-50/50 via-indigo-50/10 to-slate-50/30 border-purple-205 shadow-sm shadow-purple-100/30 hover:border-purple-350' :
+                      planKey === 'standard' ? 'bg-gradient-to-br from-blue-50/40 via-indigo-50/10 to-slate-50/30 border-blue-205 shadow-sm shadow-blue-100/30 hover:border-blue-350' :
+                      planKey === 'customizable' ? 'bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-yellow-50/30 border-amber-300 shadow-md shadow-amber-100/60 hover:border-amber-400' :
+                      'bg-gradient-to-br from-emerald-50/40 via-teal-50/10 to-slate-50/30 border-emerald-205 shadow-sm shadow-emerald-100/30 hover:border-emerald-350'
+                    }`}
+                  >
+                    {/* Plan Header */}
+                    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 ${
+                      planKey === 'premium' ? 'border-purple-100' :
+                      planKey === 'standard' ? 'border-blue-100' :
+                      planKey === 'customizable' ? 'border-amber-200' :
+                      'border-emerald-100'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
+                          planKey === 'premium' ? 'bg-purple-100 text-purple-700' :
+                          planKey === 'standard' ? 'bg-blue-100 text-blue-700' : 
+                          planKey === 'customizable' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm shadow-amber-250' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {isCustomizable ? '★' : planKey.charAt(0).toUpperCase()}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-extrabold text-slate-800 capitalize text-base">
+                              {isCustomizable ? 'Highly Flexible' : `${planKey} Plan`}
+                            </h3>
+                            {planKey === 'premium' && (
+                              <span className="bg-purple-100 border border-purple-200 text-purple-750 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                Top Tier
+                              </span>
+                            )}
+                            {planKey === 'standard' && (
+                              <span className="bg-blue-100 border border-blue-200 text-blue-750 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                Most Popular
+                              </span>
+                            )}
+                            {planKey === 'basic' && (
+                              <span className="bg-emerald-105 border border-emerald-200 text-emerald-750 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                                Essential
+                              </span>
+                            )}
+                            {isCustomizable && (
+                              <span className="bg-amber-100 border border-amber-250 text-amber-850 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm animate-pulse">
+                                Custom Builder
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-450 font-semibold">
+                            {isCustomizable ? 'Build Your Own Plan (Add-on options)' : 'Features & bullet points visible on pricing and plan cards'}
+                          </p>
+                        </div>
                       </div>
+
+                      {/* City Pricing Badge Indicator */}
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-xl bg-white/80 border border-slate-200 text-slate-600 shrink-0 self-start sm:self-center">
+                        📍 Price set in City Config
+                      </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate Per Roti</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.customPricingConfig.pricePerRoti}
-                            onChange={(e) => updatePricingRule('pricePerRoti', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
+                    {/* Plan Features */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">Features list</label>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          planKey === 'premium' ? 'bg-purple-100 text-purple-750' :
+                          planKey === 'standard' ? 'bg-blue-100 text-blue-755' :
+                          planKey === 'customizable' ? 'bg-amber-100 text-amber-850' :
+                          'bg-emerald-100 text-emerald-755'
+                        }`}>
+                          {plan.features.length} Items
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {plan.features.map((feature, idx) => (
+                          <div key={idx} className="flex gap-2.5 items-center group">
+                            <span className={`w-6 h-6 rounded-lg text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                              planKey === 'premium' ? 'bg-purple-100 text-purple-700' :
+                              planKey === 'standard' ? 'bg-blue-100 text-blue-700' :
+                              planKey === 'customizable' ? 'bg-amber-200/60 text-amber-850' :
+                              'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                            <input
+                              type="text"
+                              value={feature}
+                              onChange={(e) => {
+                                const newFeatures = [...plan.features];
+                                newFeatures[idx] = e.target.value;
+                                updatePlanFeaturesArray(planKey, newFeatures);
+                              }}
+                              className={`px-3.5 py-2.5 text-xs font-semibold w-full border rounded-xl focus:outline-none focus:ring-2 bg-white transition-all duration-200 ${
+                                planKey === 'premium' ? 'border-purple-250 focus:ring-purple-500/20 focus:border-purple-400' :
+                                planKey === 'standard' ? 'border-blue-250 focus:ring-blue-500/20 focus:border-blue-400' :
+                                planKey === 'customizable' ? 'border-amber-250 focus:ring-amber-500/20 focus:border-amber-400' :
+                                'border-emerald-250 focus:ring-emerald-500/20 focus:border-emerald-400'
+                              }`}
+                              placeholder={isCustomizable ? `Custom feature #${idx + 1}` : `e.g. ${idx === 0 ? '4 Tawa Roti' : idx === 1 ? '1 Sabzi' : 'Fresh ingredients'}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newFeatures = plan.features.filter((_, i) => i !== idx);
+                                updatePlanFeaturesArray(planKey, newFeatures);
+                              }}
+                              className={`p-1.5 rounded-lg transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 ${
+                                planKey === 'premium' ? 'text-purple-500 hover:text-red-650 hover:bg-purple-100/50' :
+                                planKey === 'standard' ? 'text-blue-500 hover:text-red-650 hover:bg-blue-100/50' :
+                                planKey === 'customizable' ? 'text-amber-500 hover:text-red-650 hover:bg-amber-100/50' :
+                                'text-emerald-500 hover:text-red-650 hover:bg-emerald-100/50'
+                              }`}
+                              title="Remove feature"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate Per Sabzi</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.customPricingConfig.pricePerSabzi}
-                            onChange={(e) => updatePricingRule('pricePerSabzi', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Supplement Rates */}
-                <div className="space-y-3.5 border-t border-slate-100 pt-5">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-l-2 border-primary pl-2">Supplement Rates</h4>
-                  
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Raita (3 Days/Wk)</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.customPricingConfig.raitaPrice3Days}
-                            onChange={(e) => updatePricingRule('raitaPrice3Days', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Raita (Daily)</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.customPricingConfig.raitaPriceDaily}
-                            onChange={(e) => updatePricingRule('raitaPriceDaily', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Dessert (Weekly)</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.customPricingConfig.dessertPriceWeekly}
-                            onChange={(e) => updatePricingRule('dessertPriceWeekly', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Dessert (Daily)</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.customPricingConfig.dessertPriceDaily}
-                            onChange={(e) => updatePricingRule('dessertPriceDaily', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Saturday Special Premium</label>
-                      <div className="relative flex items-center">
-                        <span className="absolute left-3.5 text-slate-400 font-extrabold text-sm">$</span>
-                        <input
-                          type="number"
-                          value={config.customPricingConfig.saturdaySpecialPrice}
-                          onChange={(e) => updatePricingRule('saturdaySpecialPrice', Number(e.target.value))}
-                          className="pl-7 pr-12 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                        <span className="absolute right-3.5 text-slate-400 font-bold text-[10px] uppercase">CAD</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Delivery Fee Settings */}
-                <div className="space-y-3.5 border-t border-slate-100 pt-5">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-l-2 border-primary pl-2">Delivery Fee Settings</h4>
-                  
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Free Delivery Threshold</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.deliveryFeeSettings?.minAmountForFreeDelivery ?? 150}
-                            onChange={(e) => updateDeliverySetting('minAmountForFreeDelivery', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Delivery Fee</label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
-                          <input
-                            type="number"
-                            value={config.deliveryFeeSettings?.deliveryFee ?? 15}
-                            onChange={(e) => updateDeliverySetting('deliveryFee', Number(e.target.value))}
-                            className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
-                        </div>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newFeatures = [...plan.features, ""];
+                          updatePlanFeaturesArray(planKey, newFeatures);
+                        }}
+                        className={`text-xs font-bold flex items-center gap-1 mt-1 transition ${
+                          planKey === 'premium' ? 'text-purple-700 hover:text-purple-855' :
+                          planKey === 'standard' ? 'text-blue-700 hover:text-blue-855' :
+                          planKey === 'customizable' ? 'text-amber-700 hover:text-amber-855' :
+                          'text-emerald-700 hover:text-emerald-855'
+                        }`}
+                      >
+                        + Add Feature Field
+                      </button>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1311,6 +1125,196 @@ const AdminMenu: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Custom Plan Pricing Engine & Add-on Rates */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 space-y-6 shadow-sm">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                <Sliders className="text-primary" />
+                Custom Plan Pricing Engine &amp; Add-on Rates
+              </h2>
+              <p className="text-slate-500 text-xs mt-1">
+                Configure live pricing rules, add-on rates, supplement prices, and global fallback delivery settings used to calculate customizable subscriptions.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Core pricing parameters */}
+              <div className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-4">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide border-l-2 border-primary pl-2">
+                  Core Pricing Parameters
+                </h4>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Base Customizable Price</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-slate-450 font-extrabold text-sm">$</span>
+                      <input
+                        type="number"
+                        value={config.customPricingConfig?.basePrice ?? 100}
+                        onChange={(e) => updatePricingRule('basePrice', Number(e.target.value))}
+                        className="pl-7 pr-12 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                      />
+                      <span className="absolute right-3.5 text-slate-450 font-bold text-[10px] uppercase">CAD/mo</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate Per Roti</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.pricePerRoti ?? 5}
+                          onChange={(e) => updatePricingRule('pricePerRoti', Number(e.target.value))}
+                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate Per Sabzi</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.pricePerSabzi ?? 20}
+                          onChange={(e) => updatePricingRule('pricePerSabzi', Number(e.target.value))}
+                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supplement Rates */}
+              <div className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-4">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide border-l-2 border-primary pl-2">
+                  Supplement &amp; Special Rates
+                </h4>
+                
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Raita (3 Days/Wk)</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.raitaPrice3Days ?? 10}
+                          onChange={(e) => updatePricingRule('raitaPrice3Days', Number(e.target.value))}
+                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Raita (Daily)</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.raitaPriceDaily ?? 20}
+                          onChange={(e) => updatePricingRule('raitaPriceDaily', Number(e.target.value))}
+                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Dessert (Weekly)</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.dessertPriceWeekly ?? 10}
+                          onChange={(e) => updatePricingRule('dessertPriceWeekly', Number(e.target.value))}
+                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Dessert (Daily)</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.dessertPriceDaily ?? 30}
+                          onChange={(e) => updatePricingRule('dessertPriceDaily', Number(e.target.value))}
+                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Saturday Special Premium</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-slate-400 font-extrabold text-sm">$</span>
+                      <input
+                        type="number"
+                        value={config.customPricingConfig?.saturdaySpecialPrice ?? 15}
+                        onChange={(e) => updatePricingRule('saturdaySpecialPrice', Number(e.target.value))}
+                        className="pl-7 pr-12 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                      />
+                      <span className="absolute right-3.5 text-slate-400 font-bold text-[10px] uppercase">CAD</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Global Delivery Fee Settings */}
+              <div className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-4">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide border-l-2 border-primary pl-2">
+                  Global Fallback Delivery Settings
+                </h4>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Free Delivery Threshold</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                      <input
+                        type="number"
+                        value={config.deliveryFeeSettings?.minAmountForFreeDelivery ?? 150}
+                        onChange={(e) => updateDeliverySetting('minAmountForFreeDelivery', Number(e.target.value))}
+                        className="pl-6 pr-10 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                      />
+                      <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Fallback threshold applied if not overridden by city category.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Flat Delivery Fee</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                      <input
+                        type="number"
+                        value={config.deliveryFeeSettings?.deliveryFee ?? 15}
+                        onChange={(e) => updateDeliverySetting('deliveryFee', Number(e.target.value))}
+                        className="pl-6 pr-10 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                      />
+                      <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Default flat delivery fee for orders below the threshold.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

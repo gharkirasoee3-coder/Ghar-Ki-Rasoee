@@ -30,10 +30,23 @@ class CustomizationController {
         return ResponseUtil.error(res, 403, "Unauthorized access to subscription customizations");
       }
 
+      // Enforce delivery days restriction: user can only customize meals for subscribed delivery days
+      const deliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays;
+      let finalPreferences = preferences;
+      if (Array.isArray(deliveryDays) && deliveryDays.length > 0) {
+        const allowedDays = deliveryDays.map((d) => d.toLowerCase());
+        finalPreferences = {};
+        for (const [dayKey, dayPrefs] of Object.entries(preferences)) {
+          if (allowedDays.includes(dayKey.toLowerCase())) {
+            finalPreferences[dayKey.toLowerCase()] = dayPrefs;
+          }
+        }
+      }
+
       const customization = await CustomizationModel.savePreferences(
         userId,
         subscriptionId,
-        preferences,
+        finalPreferences,
       );
 
       // Log activity
@@ -168,17 +181,32 @@ class CustomizationController {
         return ResponseUtil.error(res, 403, "Unauthorized access to customization");
       }
 
+      // Check delivery days on subscription if available
+      if (cust.subscriptionId) {
+        const SubscriptionModel = require("../models/subscription.model");
+        const subDoc = await SubscriptionModel.collection.doc(cust.subscriptionId).get();
+        if (subDoc.exists) {
+          const sub = subDoc.data();
+          const deliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays;
+          if (Array.isArray(deliveryDays) && deliveryDays.length > 0) {
+            const allowedDays = deliveryDays.map((d) => d.toLowerCase());
+            if (!allowedDays.includes(day.toLowerCase())) {
+              return ResponseUtil.error(
+                res,
+                400,
+                `Cannot customize meals for ${day}. This day is not included in your active subscription schedule.`
+              );
+            }
+          }
+        }
+      }
+
       const updated = await CustomizationModel.updateDayPreference(
         customizationId,
-        day,
+        day.toLowerCase(),
         preferences,
       );
 
-      // Invalidate relevant caches (we'd ideally need userId or subId here to be precise,
-      // but if we don't have them easily, we rely on TTL or clear globally if critical.
-      // For now, let's assume we can tolerate eventual consistency or the user will reload)
-      // To be safe, if we had the subscriptionId in the response or method, we'd clear it.
-      // Since CustomizationModel.updateDayPreference likely returns the updated obj with subId:
       if (updated && updated.subscriptionId) {
         cache.delete(`sub_customization_${updated.subscriptionId}`);
         cache.delete(`user_customization_${updated.userId}`);
@@ -213,9 +241,28 @@ class CustomizationController {
         return ResponseUtil.error(res, 403, "Unauthorized access to customization");
       }
 
+      let finalPreferences = preferences;
+      if (cust.subscriptionId) {
+        const SubscriptionModel = require("../models/subscription.model");
+        const subDoc = await SubscriptionModel.collection.doc(cust.subscriptionId).get();
+        if (subDoc.exists) {
+          const sub = subDoc.data();
+          const deliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays;
+          if (Array.isArray(deliveryDays) && deliveryDays.length > 0) {
+            const allowedDays = deliveryDays.map((d) => d.toLowerCase());
+            finalPreferences = {};
+            for (const [dayKey, dayPrefs] of Object.entries(preferences)) {
+              if (allowedDays.includes(dayKey.toLowerCase())) {
+                finalPreferences[dayKey.toLowerCase()] = dayPrefs;
+              }
+            }
+          }
+        }
+      }
+
       const customization = await CustomizationModel.updatePreferences(
         customizationId,
-        preferences,
+        finalPreferences,
       );
 
       if (customization && customization.subscriptionId) {

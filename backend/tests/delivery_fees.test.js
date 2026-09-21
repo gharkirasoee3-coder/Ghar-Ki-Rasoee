@@ -54,17 +54,17 @@ jest.mock("../src/models/order.model", () => ({
 jest.mock("../src/models/coupon.model", () => ({
   getCoupon: jest.fn(),
   incrementUsage: jest.fn(),
-}), { virtual: true });
+}));
 
 jest.mock("../src/models/activity.model", () => ({
   logActivity: jest.fn(),
-}), { virtual: true });
+}));
 
 jest.mock("../src/services/stripe.service", () => ({
   createCheckoutSession: jest.fn(),
   createCustomer: jest.fn().mockResolvedValue({ id: "cus_mock" }),
   cancelSubscription: jest.fn(),
-}), { virtual: true });
+}));
 
 jest.mock("../src/utils/response.util", () => ({
   send: jest.fn(),

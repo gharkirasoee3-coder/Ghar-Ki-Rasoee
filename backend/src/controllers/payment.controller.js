@@ -241,10 +241,14 @@ class PaymentController {
       const newSub = await SubscriptionModel.createSubscription(userId, planData);
 
       // Update user address
-      await db.collection("users").doc(userId).update({
-        address: deliveryAddress,
-        updatedAt: new Date().toISOString(),
-      });
+      try {
+        await db.collection("users").doc(userId).update({
+          address: deliveryAddress,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error("Error updating user address:", err);
+      }
 
       // Fetch user details for payment confirmation email
       const userDoc = await db.collection("users").doc(userId).get();
@@ -353,10 +357,14 @@ class PaymentController {
       const newOrder = await OrderModel.createOrder(orderData);
 
       // Update user address
-      await db.collection("users").doc(userId).update({
-        address: deliveryAddress,
-        updatedAt: new Date().toISOString(),
-      });
+      try {
+        await db.collection("users").doc(userId).update({
+          address: deliveryAddress,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error("Error updating user address:", err);
+      }
 
       const userEmail = userData.email || session.customer_details?.email || session.customer_email;
       const userName = userData.name || userData.displayName || session.customer_details?.name || userEmail?.split("@")[0] || "Customer";

@@ -199,11 +199,26 @@ class AuthController {
 
   static async getProfile(req, res) {
     try {
-      const { uid } = req.user;
-      const user = await UserModel.getUser(uid);
+      const { uid, email, name, picture } = req.user;
+      let user = await UserModel.getUser(uid);
 
       if (!user) {
-        return ResponseUtil.error(res, 404, "User not found");
+        let displayName = name;
+        if (!displayName && email) {
+          displayName = email.split("@")[0];
+          displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+        }
+        const newUserData = {
+          name: displayName || "Customer",
+          email: email || "",
+          picture: picture || "",
+          phone: "N/A",
+          role: (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim()).includes(email) ? "admin" : "customer",
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        };
+        await UserModel.createOrUpdateUser(uid, newUserData);
+        user = { uid, ...newUserData };
       }
 
       // Fetch active subscription

@@ -157,15 +157,16 @@ class SubscriptionController {
 
       // Also update user profile with this address if they don't have one
       const UserModel = require("../models/user.model");
-      await UserModel.collection
-        .doc(uid)
-        .update({
-          address: deliveryAddress,
-          updatedAt: new Date().toISOString(),
-        })
-        .catch((err) =>
-          console.error("Error updating user address during sub:", err),
-        );
+      try {
+        await UserModel.collection
+          .doc(uid)
+          .update({
+            address: deliveryAddress,
+            updatedAt: new Date().toISOString(),
+          });
+      } catch (err) {
+        console.error("Error updating user address during sub:", err);
+      }
 
       // Log activity
       const ActivityModel = require("../models/activity.model");

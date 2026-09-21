@@ -70,9 +70,16 @@ class SchedulerService {
         }
 
         // Skip if not a scheduled delivery day for this subscription
-        if (sub.deliveryDays && !sub.deliveryDays.includes(dayName)) {
-          console.log(`Skipping order for user ${sub.userId} today (not a scheduled delivery day: ${dayName})`);
-          return;
+        if (sub.deliveryDays && Array.isArray(sub.deliveryDays) && sub.deliveryDays.length > 0) {
+          const isScheduled = sub.deliveryDays.some(
+            (d) => d && d.toLowerCase() === dayName.toLowerCase(),
+          );
+          if (!isScheduled) {
+            console.log(
+              `Skipping order for user ${sub.userId} today (not a scheduled delivery day: ${dayName})`,
+            );
+            return;
+          }
         }
 
         const CustomizationModel = require("../models/customization.model");

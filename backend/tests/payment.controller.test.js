@@ -56,7 +56,7 @@ jest.mock("../src/models/notification.model", () => ({
   create: jest.fn().mockResolvedValue(true),
 }));
 
-// Mock virtual dependencies
+// Mock dependencies
 jest.mock("../src/models/menu.model", () => ({
   getMenuConfig: jest.fn(),
   calculateCustomPrice: jest.fn(),
@@ -67,16 +67,16 @@ jest.mock("../src/models/menu.model", () => ({
     if (addr.toLowerCase().includes("vancouver")) return "Vancouver";
     return null;
   }),
-}), { virtual: true });
+}));
 
 jest.mock("../src/models/coupon.model", () => ({
   getCoupon: jest.fn(),
   incrementUsage: jest.fn().mockResolvedValue(true),
-}), { virtual: true });
+}));
 
 jest.mock("../src/services/email.service", () => ({
   sendPaymentConfirmationEmail: jest.fn().mockResolvedValue(true),
-}), { virtual: true });
+}));
 
 // Mock Firebase Admin SDK
 const mockGet = jest.fn();
@@ -1144,17 +1144,17 @@ describe("PaymentController", () => {
       it("should renew the active subscription by extending the end date (base date is currentEndDate)", async () => {
         const mockSubData1 = {
           userId: "user-renew-1",
-          endDate: "2026-09-01T00:00:00.000Z", // Future date
+          endDate: "2030-09-01T00:00:00.000Z", // Future date
           plan: "Standard",
           subscriptionId: "sub-to-renew-1",
-          createdAt: "2026-08-01",
+          createdAt: "2030-08-01",
         };
         const mockSubData2 = {
           userId: "user-renew-1",
-          endDate: "2026-09-01T00:00:00.000Z", // Future date
+          endDate: "2030-09-01T00:00:00.000Z", // Future date
           plan: "Standard",
           subscriptionId: "sub-to-renew-2",
-          createdAt: "2026-08-02",
+          createdAt: "2030-08-02",
         };
 
         const mockSubDoc1 = {
@@ -1179,7 +1179,7 @@ describe("PaymentController", () => {
 
         await PaymentController.handleWebhook(req, res);
 
-        const expectedNewEndDate = new Date("2026-09-01T00:00:00.000Z");
+        const expectedNewEndDate = new Date("2030-09-01T00:00:00.000Z");
         expectedNewEndDate.setDate(expectedNewEndDate.getDate() + 30);
 
         expect(mockUpdate).toHaveBeenCalledWith(

@@ -5,7 +5,7 @@ import axios from 'axios';
 import { ENV } from '../../../config/env.config';
 import PageContainer from '../../../components/layout/PageContainer';
 import { toast } from 'sonner';
-import { Check, ChevronLeft, Save, Star, Sparkles, AlertCircle } from 'lucide-react';
+import { Check, ChevronLeft, Save, Star, Sparkles } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface DayPreferences {
@@ -46,8 +46,10 @@ const CustomizeSubscription: React.FC = () => {
   const [planType, setPlanType] = useState<'basic' | 'standard' | 'premium' | 'custom'>('standard');
   const [customSpecs, setCustomSpecs] = useState<CustomSpecs | null>(null);
   const [selectedDay, setSelectedDay] = useState<string>('monday');
+  const [days, setDays] = useState<string[]>(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
   
   // Weekly menus fetched from the API
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [weeklyMenus, setWeeklyMenus] = useState<any>(null);
 
   const [preferences, setPreferences] = useState<WeeklyPreferences>({
@@ -59,7 +61,6 @@ const CustomizeSubscription: React.FC = () => {
     saturday: {}
   });
 
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const dayNames: Record<string, string> = {
     monday: 'Monday',
     tuesday: 'Tuesday',
@@ -108,8 +109,10 @@ const CustomizeSubscription: React.FC = () => {
           return;
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let sub = res.data.data;
         if (Array.isArray(sub)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const activeSub = sub.find((s: any) => s.status === 'Active');
           if (activeSub) {
             sub = activeSub;
@@ -121,6 +124,19 @@ const CustomizeSubscription: React.FC = () => {
           }
         }
         setSubscription(sub);
+
+        // Parse subscribed delivery days
+        const rawDeliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const normalizedDeliveryDays = Array.isArray(rawDeliveryDays) && rawDeliveryDays.length > 0
+          ? rawDeliveryDays.map((d: string) => d.toLowerCase())
+          : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+        const availableDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].filter((d) =>
+          normalizedDeliveryDays.includes(d)
+        );
+        const activeSubscribedDays = availableDays.length > 0 ? availableDays : ['monday'];
+        setDays(activeSubscribedDays);
+        setSelectedDay(activeSubscribedDays[0]);
 
         const plan = sub.plan?.toLowerCase() || '';
         const details = sub.planDetails || {};
@@ -147,15 +163,17 @@ const CustomizeSubscription: React.FC = () => {
 
         setPlanType(currentPlanType);
 
-        // 4. Build Default Preferences
-        const getDefaultPrefs = (): WeeklyPreferences => {
-          // For custom plans, base menus on standard/premium
+        // 4. Build Default Preferences strictly for subscribed delivery days
+        const getDefaultPrefs = (targetDays: string[]): WeeklyPreferences => {
           const referenceType = currentPlanType === 'custom' ? 'premium' : currentPlanType;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const refMenu = fetchedMenus[referenceType];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const defaults: any = {};
 
-          days.forEach(day => {
+          targetDays.forEach(day => {
             const dMenu = refMenu[day] || {};
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const dayPrefs: any = {};
 
             // Check if Saturday Special is active for this user
@@ -191,7 +209,7 @@ const CustomizeSubscription: React.FC = () => {
           return defaults;
         };
 
-        const defaultPreferences = getDefaultPrefs();
+        const defaultPreferences = getDefaultPrefs(activeSubscribedDays);
 
         // 5. Fetch saved preferences
         const customRes = await axios.get(
@@ -202,7 +220,7 @@ const CustomizeSubscription: React.FC = () => {
         if (customRes.data.data?.customization?.preferences) {
           const savedPrefs = customRes.data.data.customization.preferences;
           const mergedPrefs = { ...defaultPreferences };
-          days.forEach(day => {
+          activeSubscribedDays.forEach(day => {
             if (savedPrefs[day] && Object.keys(savedPrefs[day]).length > 0) {
               mergedPrefs[day as keyof WeeklyPreferences] = {
                 ...mergedPrefs[day as keyof WeeklyPreferences],
@@ -297,11 +315,20 @@ const CustomizeSubscription: React.FC = () => {
     try {
       setSaving(true);
       const token = await user?.getIdToken();
+
+      // Only serialize preferences for the subscribed delivery days
+      const filteredPreferences: Partial<WeeklyPreferences> = {};
+      days.forEach((day) => {
+        if (preferences[day as keyof WeeklyPreferences]) {
+          filteredPreferences[day as keyof WeeklyPreferences] = preferences[day as keyof WeeklyPreferences];
+        }
+      });
+
       await axios.post(
         `${ENV.API_URL}/menu/customizations`,
         {
           subscriptionId: subscription.subscriptionId,
-          preferences
+          preferences: filteredPreferences
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -316,28 +343,6 @@ const CustomizeSubscription: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const isComplete = () => {
-    if (!weeklyMenus) return false;
-    return days.every(day => {
-      const ref = planType === 'custom' ? 'premium' : planType;
-      const dayMenu = weeklyMenus[ref]?.[day] || {};
-      const dayPrefs = preferences[day as keyof WeeklyPreferences] || {};
-      
-      const isSatSpec = dayMenu.isSaturdaySpecial && 
-        (planType === 'premium' || (planType === 'custom' && customSpecs?.saturdaySpecial));
-
-      if (isSatSpec) {
-        return dayPrefs.specialFood && dayPrefs.dessert;
-      }
-      
-      const count = getSabziCount();
-      if (count === 0) return true;
-      if (count === 1) return !!dayPrefs.sabzi1;
-      if (count === 2) return !!(dayPrefs.sabzi1 && dayPrefs.sabzi2);
-      return !!(dayPrefs.sabzi1 && dayPrefs.sabzi2 && dayPrefs.sabzi3);
-    });
   };
 
   if (loading || !currentDayMenu) {
@@ -359,10 +364,10 @@ const CustomizeSubscription: React.FC = () => {
   return (
     <PageContainer className="py-10">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 space-y-4">
         <button
           onClick={() => navigate('/my-subscription')}
-          className="flex items-center gap-2 text-text-secondary hover:text-primary mb-4 transition font-medium"
+          className="flex items-center gap-2 text-text-secondary hover:text-primary mb-2 transition font-medium"
         >
           <ChevronLeft size={20} />
           Back to My Subscription
@@ -373,12 +378,30 @@ const CustomizeSubscription: React.FC = () => {
               <Sparkles size={26} className="text-primary" />
               Customize Your Meal Selections
             </h1>
-            <p className="text-text-secondary text-sm md:text-base">Configure your dish preferences for every delivery day.</p>
+            <p className="text-text-secondary text-sm md:text-base">Configure your dish preferences for your subscribed delivery days.</p>
           </div>
           <div className="bg-primary/5 px-6 py-3.5 rounded-2xl border-2 border-primary/20 w-fit">
             <p className="text-xs text-text-secondary uppercase font-bold tracking-wider">Active Plan</p>
             <p className="text-xl font-black text-primary capitalize">{planType === 'custom' ? 'Custom Plan' : `${planType} Plan`}</p>
           </div>
+        </div>
+
+        {/* Subscribed Days Notice Banner */}
+        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border border-orange-200/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-orange-500/10 text-orange-600 rounded-xl shrink-0">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-orange-800">Your Active Delivery Schedule ({days.length} Days / Week)</p>
+              <p className="text-sm font-extrabold text-orange-950">
+                {days.map(d => dayNames[d]).join(', ')}
+              </p>
+            </div>
+          </div>
+          <span className="text-xs text-orange-700/80 font-medium bg-white/80 px-3 py-1.5 rounded-xl border border-orange-200/50 w-fit">
+            🔒 Locked per your subscription
+          </span>
         </div>
       </div>
 
@@ -677,21 +700,19 @@ const CustomizeSubscription: React.FC = () => {
       </div>
 
       {/* Save Button */}
-      <div className="mt-8 flex justify-center flex-col items-center gap-3">
+      <div className="mt-8 flex justify-center flex-col items-center gap-2.5">
         <button
           onClick={handleSavePreferences}
-          disabled={!isComplete() || saving}
+          disabled={saving}
           className="flex items-center gap-3 px-10 py-4 bg-primary text-white hover:bg-primary-hover rounded-xl font-bold text-lg shadow-lg hover:shadow-primary/30 transition disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
         >
           <Save size={22} />
-          {saving ? 'Saving...' : isComplete() ? 'Save Preferences' : 'Complete All Days to Save'}
+          {saving ? 'Saving Preferences...' : 'Save Preferences'}
         </button>
-        {!isComplete() && (
-          <p className="text-xs text-red-500 font-bold flex items-center gap-1.5">
-            <AlertCircle size={14} />
-            Please make sure you have selected dishes for all 6 days (Monday through Saturday).
-          </p>
-        )}
+        <p className="text-xs text-text-secondary font-medium flex items-center gap-1.5 text-center max-w-md">
+          <span>💡</span>
+          Unchanged or unselected days will automatically receive the chef&apos;s fresh default daily rotation.
+        </p>
       </div>
     </PageContainer>
   );

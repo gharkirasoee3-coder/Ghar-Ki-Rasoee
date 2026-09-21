@@ -132,9 +132,37 @@ class AdminController {
       const enrichedSubscriptions = await Promise.all(
         subscriptions.map(async (sub) => {
           try {
+            let userData = null;
             const userDoc = await db.collection("users").doc(sub.userId).get();
             if (userDoc.exists) {
-              const userData = userDoc.data();
+              userData = userDoc.data();
+            } else if (admin.auth) {
+              try {
+                const authUser = await admin.auth().getUser(sub.userId);
+                if (authUser) {
+                  let userName = authUser.displayName;
+                  if (!userName && authUser.email) {
+                    userName = authUser.email.split("@")[0];
+                    userName = userName.charAt(0).toUpperCase() + userName.slice(1);
+                  }
+                  userData = {
+                    name: userName || "Customer",
+                    email: authUser.email || "",
+                    phone: authUser.phoneNumber || "N/A",
+                  };
+                  await db.collection("users").doc(sub.userId).set({
+                    ...userData,
+                    role: "customer",
+                    createdAt: new Date().toISOString(),
+                    lastLoginAt: new Date().toISOString(),
+                  }, { merge: true }).catch(() => {});
+                }
+              } catch (authErr) {
+                // Not found in Auth or auth method error
+              }
+            }
+
+            if (userData) {
               let userName = userData.name || userData.displayName;
               if (!userName && userData.email) {
                 userName = userData.email.split("@")[0];
@@ -153,7 +181,7 @@ class AdminController {
               e,
             );
           }
-          return { ...sub, userName: "Unknown User", userEmail: "", userPhone: "N/A" };
+          return { ...sub, userName: "Customer", userEmail: "", userPhone: "N/A" };
         }),
       );
 
@@ -238,12 +266,35 @@ class AdminController {
         const sub = doc.data();
         if (sub.skippedDates && sub.skippedDates.includes(todayStr)) continue;
 
-        if (sub.deliveryDays && !sub.deliveryDays.includes(dayName)) continue;
+        if (sub.deliveryDays && Array.isArray(sub.deliveryDays) && sub.deliveryDays.length > 0) {
+          const isScheduled = sub.deliveryDays.some(
+            (d) => d && d.toLowerCase() === dayName.toLowerCase()
+          );
+          if (!isScheduled) continue;
+        }
 
+        let userData = null;
         const userDoc = await db.collection("users").doc(sub.userId).get();
-        const userData = userDoc.exists
-          ? userDoc.data()
-          : { name: "Unknown User" };
+        if (userDoc.exists) {
+          userData = userDoc.data();
+        } else if (admin.auth) {
+          try {
+            const authUser = await admin.auth().getUser(sub.userId);
+            if (authUser) {
+              let authName = authUser.displayName;
+              if (!authName && authUser.email) {
+                authName = authUser.email.split("@")[0];
+                authName = authName.charAt(0).toUpperCase() + authName.slice(1);
+              }
+              userData = {
+                name: authName || "Customer",
+                email: authUser.email || "",
+                phone: authUser.phoneNumber || "N/A",
+              };
+            }
+          } catch (e) {}
+        }
+        userData = userData || { name: "Customer" };
 
         let customerName = userData.name || userData.displayName;
         if (!customerName && userData.email) {
@@ -546,11 +597,37 @@ class AdminController {
       const { userId } = req.params;
 
       // 1. User profile
+      let userData = null;
       const userDoc = await db.collection("users").doc(userId).get();
-      if (!userDoc.exists) {
+      if (userDoc.exists) {
+        userData = userDoc.data();
+      } else if (admin.auth) {
+        try {
+          const authUser = await admin.auth().getUser(userId);
+          if (authUser) {
+            let authName = authUser.displayName;
+            if (!authName && authUser.email) {
+              authName = authUser.email.split("@")[0];
+              authName = authName.charAt(0).toUpperCase() + authName.slice(1);
+            }
+            userData = {
+              name: authName || "Customer",
+              email: authUser.email || "",
+              phone: authUser.phoneNumber || "N/A",
+              role: "customer",
+            };
+            await db.collection("users").doc(userId).set({
+              ...userData,
+              createdAt: new Date().toISOString(),
+              lastLoginAt: new Date().toISOString(),
+            }, { merge: true }).catch(() => {});
+          }
+        } catch (authErr) {}
+      }
+
+      if (!userData) {
         return ResponseUtil.error(res, 404, "User not found");
       }
-      const userData = userDoc.data();
 
       let displayName = userData.name || userData.displayName;
       if (!displayName && userData.email) {
