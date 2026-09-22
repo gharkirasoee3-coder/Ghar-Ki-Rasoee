@@ -342,6 +342,15 @@ class AdminController {
           finalPreference = { ...finalPreference, ...todayPreference };
         }
 
+        // Apply custom plan overrides if defined on the subscription
+        if (sub.customDetails?.roti !== undefined || sub.planDetails?.roti !== undefined) {
+          finalPreference.roti = `${sub.customDetails?.roti ?? sub.planDetails?.roti} Roti`;
+        }
+        const customRice = sub.customDetails?.rice !== undefined ? sub.customDetails.rice : sub.planDetails?.rice;
+        if (customRice !== undefined && Number(customRice) > 0) {
+          finalPreference.rice = `${customRice} Rice`;
+        }
+
         if (finalPreference.sideOption) {
           finalPreference.side_option = finalPreference.sideOption;
           delete finalPreference.sideOption;
@@ -409,7 +418,78 @@ class AdminController {
           todayCustomization: finalPreference,
           deliveryStatus: todayOrder ? todayOrder.status : "Confirmed",
           day: dayName,
+          startDate: sub.startDate || null,
+          endDate: sub.endDate || null,
+          remainingDays: sub.remainingDays !== undefined ? sub.remainingDays : null,
+          paymentStatus: sub.paymentStatus || "Paid",
+          subscriptionStatus: sub.status || "Active",
         });
+      }
+
+      // Also fetch one-time meal orders scheduled for today at 8:00 AM
+      try {
+        const oneTimeOrdersSnapshot = await db
+          .collection("orders")
+          .where("orderType", "==", "one-time")
+          .where("deliveryDate", "==", todayStr)
+          .get();
+
+        for (const doc of oneTimeOrdersSnapshot.docs) {
+          const order = doc.data();
+          if (order.status === "Cancelled") continue;
+
+          let customerName = "Guest Customer";
+          let email = "N/A";
+          let phone = order.customerPhone || "N/A";
+          let address = order.deliveryAddress || "No address provided";
+
+          if (order.userId) {
+            try {
+              const userDoc = await db.collection("users").doc(order.userId).get();
+              if (userDoc.exists) {
+                const uData = userDoc.data();
+                customerName = uData.name || uData.displayName || customerName;
+                email = uData.email || email;
+                phone = phone !== "N/A" ? phone : (uData.phone || "N/A");
+                address = address !== "No address provided" ? address : (uData.address || address);
+              }
+            } catch (e) {
+              console.error("Error fetching user for one-time order:", e);
+            }
+          }
+
+          const custom = order.customDetails || {};
+          const oneTimeCustomization = {
+            meal: "One-Time Meal",
+            roti: `${custom.rotiCount || 8} Roti`,
+            sabzi1: custom.sabziSet1 || "Sabzi Set 1",
+            sabzi2: custom.sabziSet2 || "Sabzi Set 2",
+          };
+          if (custom.extraRaita) oneTimeCustomization.raita = "Extra Raita/Salad";
+          if (custom.extraSweet) oneTimeCustomization.dessert = "Extra Dessert Sweet";
+
+          deliveries.push({
+            subscriptionId: `one-time-${doc.id}`,
+            orderId: doc.id,
+            userId: order.userId || "guest",
+            customerName,
+            email,
+            phone,
+            address,
+            plan: "One-Time Meal",
+            mealPreference: "Veg",
+            todayCustomization: oneTimeCustomization,
+            deliveryStatus: order.status || "Confirmed",
+            day: dayName,
+            startDate: order.deliveryDate || todayStr,
+            endDate: order.deliveryDate || todayStr,
+            remainingDays: 1,
+            paymentStatus: order.paymentStatus || "Paid",
+            subscriptionStatus: "One-Time",
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching one-time orders for today's deliveries:", err);
       }
 
       const result = { deliveries, date: todayStr, day: dayName };

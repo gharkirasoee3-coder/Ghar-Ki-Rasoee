@@ -28,6 +28,7 @@ interface WeeklyPreferences {
 
 interface CustomSpecs {
   roti: number;
+  rice?: number;
   sabziChoices: number;
   raitaOption: 'none' | '3days' | 'daily';
   dessertOption: 'none' | 'weekly' | 'daily';
@@ -149,6 +150,7 @@ const CustomizeSubscription: React.FC = () => {
           currentPlanType = 'custom';
           specs = {
             roti: Number(details.roti) !== undefined ? Number(details.roti) : 6,
+            rice: Number(details.rice) || 0,
             sabziChoices: Number(details.sabziChoices) || 2,
             raitaOption: details.raitaOption || '3days',
             dessertOption: details.dessertOption || 'none',
@@ -592,8 +594,8 @@ const CustomizeSubscription: React.FC = () => {
                   </>
                 )}
 
-                {/* 3 Sabzi Choices (Custom only) */}
-                {getSabziCount() === 3 && (
+                {/* 3+ Sabzi Choices (Custom only) */}
+                {getSabziCount() >= 3 && (
                   <div className="bg-purple-50/50 rounded-2xl p-6 border border-purple-200/60">
                     <h4 className="font-bold text-base text-purple-950 uppercase tracking-wider mb-4">Sabzi Selection 3 (Extra Selection):</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -677,6 +679,13 @@ const CustomizeSubscription: React.FC = () => {
                       <span>🫓</span>
                       <span>{planType === 'custom' ? customSpecs?.roti : currentDayMenu.roti} Tawa Roti</span>
                     </div>
+
+                    {planType === 'custom' && customSpecs?.rice && customSpecs.rice > 0 ? (
+                      <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-150 shadow-xs">
+                        <span>🍚</span>
+                        <span>{customSpecs.rice} Rice Bowl{customSpecs.rice > 1 ? 's' : ''}</span>
+                      </div>
+                    ) : null}
 
                     {isRaitaIncludedToday() && (
                       <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-150 shadow-xs">

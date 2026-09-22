@@ -7,10 +7,15 @@ export interface OrderItem {
 export interface OrderCustomDetails {
   day?: number;
   rotiCount?: number;
+  sabziBoxes?: number;
+  sabziBreakdown?: Record<string, number>;
+  selectedSabzi?: string;
   sabziSet1?: string;
   sabziSet2?: string;
   extraRaita?: boolean;
   extraSweet?: boolean;
+  deliveryDays?: string[];
+  basePlan?: string;
   [key: string]: unknown;
 }
 

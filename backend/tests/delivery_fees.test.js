@@ -167,7 +167,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
   });
 
   describe("COD One-Time Order Delivery Fee (OrderController)", () => {
-    it("should add delivery fee to order price when subtotal is below threshold", async () => {
+    it("should have free delivery (deliveryFee: 0) for one-time meal orders regardless of subtotal", async () => {
       const OrderModel = require("../src/models/order.model");
       OrderModel.createOrder.mockResolvedValue({ orderId: "ord_123" });
       mockGet.mockResolvedValue({
@@ -187,11 +187,11 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
 
       await OrderController.createOrder(req, res);
 
-      // Price should be 20 + 15 = 35
+      // Price should be 20 with 0 delivery fee
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 35,
-          deliveryFee: 15,
+          price: 20,
+          deliveryFee: 0,
         })
       );
       expect(ResponseUtil.send).toHaveBeenCalledWith(
@@ -222,7 +222,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
 
       await OrderController.createOrder(req, res);
 
-      // Price should be 160
+      // Price should be 160 with 0 delivery fee
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           price: 160,
@@ -266,9 +266,9 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
   });
 
   describe("City-Specific Delivery Fee Override", () => {
-    it("should use city-specific delivery fee ($25) for far cities instead of default ($15)", async () => {
-      const OrderModel = require("../src/models/order.model");
-      OrderModel.createOrder.mockResolvedValue({ orderId: "ord_city" });
+    it("should use city-specific delivery fee ($25) for far cities for subscription below threshold", async () => {
+      const SubscriptionModel = require("../src/models/subscription.model");
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub_city" });
 
       // Return config with city-specific delivery settings
       mockGet.mockResolvedValue({
@@ -284,20 +284,23 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       });
 
       req.body = {
-        orderType: "one-time",
-        plan: "Meal",
-        items: [{ price: 50, quantity: 1 }],
+        plan: "Basic",
+        planDetails: { price: 120 },
+        durationMonths: 1,
         deliveryAddress: "Toronto, ON",
         city: "Toronto",
         paymentMethod: "Cash on Delivery",
       };
 
-      await OrderController.createOrder(req, res);
+      await SubscriptionController.createSubscription(req, res);
 
-      // Toronto is "far" per the mock, so $25 fee, total = 50 + 25 = 75
-      expect(OrderModel.createOrder).toHaveBeenCalledWith(
+      // Toronto is "far" per the mock, so $25 fee, total = 120 + 25 = 145
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith(
+        "user-1",
         expect.objectContaining({
-          price: 75,
+          planDetails: expect.objectContaining({
+            price: 145,
+          }),
           deliveryFee: 25,
         })
       );
@@ -331,6 +334,93 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
           price: 150,
           deliveryFee: 0,
         })
+      );
+    });
+  });
+
+  describe("Recurring Coupon Restrictions on One-Time Orders", () => {
+    const CouponController = require("../src/controllers/coupon.controller");
+    const CouponModel = require("../src/models/coupon.model");
+
+    it("should reject repeating coupon during validation for one-time meal orders", async () => {
+      CouponModel.getCoupon.mockResolvedValue({
+        code: "SAVE20RECURRING",
+        isActive: true,
+        duration: "repeating",
+        durationInMonths: 3,
+        discountType: "percentage",
+        discountValue: 20,
+      });
+
+      req.body = {
+        code: "SAVE20RECURRING",
+        amount: 25,
+        type: "one-time",
+      };
+
+      await CouponController.validateCoupon(req, res);
+
+      expect(ResponseUtil.error).toHaveBeenCalledWith(
+        res,
+        400,
+        "Recurring subscription coupons cannot be applied to one-time meal orders"
+      );
+    });
+
+    it("should allow repeating coupon for subscription orders", async () => {
+      CouponModel.getCoupon.mockResolvedValue({
+        code: "SAVE20RECURRING",
+        isActive: true,
+        duration: "repeating",
+        durationInMonths: 3,
+        discountType: "percentage",
+        discountValue: 20,
+      });
+
+      req.body = {
+        code: "SAVE20RECURRING",
+        amount: 190,
+        type: "subscription",
+      };
+
+      await CouponController.validateCoupon(req, res);
+
+      expect(ResponseUtil.send).toHaveBeenCalledWith(
+        res,
+        200,
+        "Coupon validated successfully",
+        expect.objectContaining({
+          code: "SAVE20RECURRING",
+          duration: "repeating",
+          discountAmount: 38,
+          finalAmount: 152,
+        })
+      );
+    });
+
+    it("should reject creating one-time COD order with repeating coupon", async () => {
+      CouponModel.getCoupon.mockResolvedValue({
+        code: "REPEATING50",
+        isActive: true,
+        duration: "repeating",
+        discountType: "percentage",
+        discountValue: 50,
+      });
+
+      req.body = {
+        orderType: "one-time",
+        items: [{ price: 20, quantity: 1 }],
+        deliveryAddress: "123 Main St",
+        couponCode: "REPEATING50",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await OrderController.createOrder(req, res);
+
+      expect(ResponseUtil.error).toHaveBeenCalledWith(
+        res,
+        400,
+        "Recurring subscription coupons cannot be applied to one-time meal orders"
       );
     });
   });

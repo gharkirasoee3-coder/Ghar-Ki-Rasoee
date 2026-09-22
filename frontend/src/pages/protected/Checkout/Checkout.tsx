@@ -5,16 +5,18 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
 import PageContainer from '../../../components/layout/PageContainer';
-import { MapPin, CreditCard, Map as MapIcon } from 'lucide-react';
+import { MapPin, CreditCard, Map as MapIcon, Truck } from 'lucide-react';
 import LocationPicker from '../../../components/common/LocationPicker';
+import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
 
 const Checkout: React.FC = () => {
   const { items, cartTotal, clearCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
   
+  const deliverySchedule = getNextDeliverySchedule();
   const [address, setAddress] = useState('');
-  const [date] = useState(new Date().toISOString().split('T')[0]); // Default to today
+  const [date] = useState(deliverySchedule.deliveryDate); // Calculated delivery date
   const [paymentMethod, setPaymentMethod] = useState('Online');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -219,6 +221,44 @@ const Checkout: React.FC = () => {
              />
 
 
+
+             {/* Delivery Schedule Information Ticket */}
+             <div className="bg-[#f0fdf4] border-2 border-green-200/80 p-4 rounded-xl shadow-sm space-y-3">
+               <div className="flex items-center gap-3 border-b border-green-200 pb-2.5">
+                 <div className="w-9 h-9 rounded-lg bg-green-600 text-white flex items-center justify-center shrink-0">
+                   <Truck size={20} strokeWidth={2.5} />
+                 </div>
+                 <div>
+                   <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 block">
+                     Scheduled Meal Delivery (8:00 AM)
+                   </span>
+                   <h4 className="text-sm sm:text-base font-black text-gray-900">
+                     {deliverySchedule.formattedDate} at 8:00 AM
+                   </h4>
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-3 gap-2 text-[11px] font-semibold text-gray-700">
+                 <div className="bg-white border border-green-100 p-2 rounded-lg text-center">
+                   <span className="text-[9px] text-gray-400 block font-bold uppercase">Cutoff</span>
+                   <span>10:00 PM</span>
+                 </div>
+                 <div className="bg-white border border-green-100 p-2 rounded-lg text-center">
+                   <span className="text-[9px] text-gray-400 block font-bold uppercase">Days</span>
+                   <span>Mon – Sat</span>
+                 </div>
+                 <div className="bg-white border border-green-100 p-2 rounded-lg text-center">
+                   <span className="text-[9px] text-gray-400 block font-bold uppercase">Sunday</span>
+                   <span className="text-red-600">Off</span>
+                 </div>
+               </div>
+
+               <div className="bg-white border border-green-200 p-2.5 rounded-lg text-xs font-medium text-gray-800">
+                 {deliverySchedule.isAfterCutoff 
+                   ? `🌙 Night Order (After 10:00 PM): Delivery scheduled for ${deliverySchedule.formattedDate} at 8:00 AM.` 
+                   : `✅ On-Time Order (Before 10:00 PM): Delivery scheduled for ${deliverySchedule.formattedDate} at 8:00 AM.`}
+               </div>
+             </div>
 
              <div className="pt-4 border-t border-gray-100">
                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">

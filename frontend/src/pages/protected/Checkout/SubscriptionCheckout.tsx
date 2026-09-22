@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PageContainer from '../../../components/layout/PageContainer';
-import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar, Phone, MessageSquare } from 'lucide-react';
+import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar, Phone, MessageSquare, Clock, Truck } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
 import LocationPicker from '../../../components/common/LocationPicker';
 import { useCity } from '../../../context/CityContext';
+import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
 
 const SubscriptionCheckout: React.FC = () => {
   const location = useLocation();
@@ -110,7 +111,7 @@ const SubscriptionCheckout: React.FC = () => {
 
   const { discountAmount, finalAmount } = getCouponAmounts();
   const basePriceForDelivery = getAdjustedPrice();
-  const isFreeDelivery = basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
+  const isFreeDelivery = isOneTime || basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
   const deliveryFee = isFreeDelivery ? 0 : deliverySettings.deliveryFee;
   const totalAmount = Math.round((finalAmount + deliveryFee) * 100) / 100;
 
@@ -157,7 +158,8 @@ const SubscriptionCheckout: React.FC = () => {
         `${ENV.API_URL}/payments/validate-coupon`,
         {
           code: couponInput.trim(),
-          amount: getAdjustedPrice()
+          amount: getAdjustedPrice(),
+          type: isOneTime ? 'one-time' : 'subscription'
         },
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -165,6 +167,11 @@ const SubscriptionCheckout: React.FC = () => {
       );
       if (response.data.success) {
         const couponData = response.data.data;
+        if (isOneTime && couponData.duration === 'repeating') {
+          setCouponError('Recurring subscription coupons cannot be applied to one-time meal orders.');
+          setAppliedCoupon(null);
+          return;
+        }
         setAppliedCoupon(couponData);
         setCouponSuccess('Coupon discount applied successfully!');
         if (couponData.duration === 'repeating') {
@@ -355,6 +362,11 @@ const SubscriptionCheckout: React.FC = () => {
     setBypassWarning(true);
     await executeCheckout(true, false);
   };
+
+  const estimatedSchedule = getNextDeliverySchedule(
+    new Date(),
+    isOneTime ? undefined : (selectedDays.length > 0 ? selectedDays : undefined)
+  );
 
   return (
     <PageContainer className="py-6 sm:py-10 md:py-12 px-3 sm:px-6">
@@ -654,6 +666,53 @@ const SubscriptionCheckout: React.FC = () => {
                 </p>
               </div>
             )}
+
+            {/* Delivery Schedule Information Ticket */}
+            <div className="bg-[#f0fdf4] border-2 border-green-200/80 p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm space-y-3 relative overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-green-200 pb-3">
+                <div className="w-10 h-10 rounded-xl bg-green-600 text-white flex items-center justify-center shadow-md shadow-green-600/20 shrink-0">
+                  <Truck size={22} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 block">
+                    {isOneTime ? 'Scheduled Meal Delivery (8:00 AM)' : 'First Scheduled Delivery (8:00 AM)'}
+                  </span>
+                  <h4 className="text-base sm:text-lg font-black text-gray-900 mt-0.5">
+                    {estimatedSchedule.formattedDate} at 8:00 AM
+                  </h4>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-semibold text-gray-700 pt-1">
+                <div className="flex items-center gap-2 bg-white/80 border border-green-100 p-2.5 rounded-xl">
+                  <Clock size={16} className="text-green-600 shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-bold">DAILY CUTOFF</span>
+                    <span>10:00 PM</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white/80 border border-green-100 p-2.5 rounded-xl">
+                  <Calendar size={16} className="text-green-600 shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-bold">DELIVERY DAYS</span>
+                    <span>Mon – Sat (8:00 AM)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white/80 border border-green-100 p-2.5 rounded-xl">
+                  <span className="text-sm">🛑</span>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-bold">SUNDAY</span>
+                    <span className="text-red-600">Off (No Deliveries)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-green-200 p-3 rounded-xl text-xs font-medium text-gray-800 shadow-sm leading-relaxed">
+                {estimatedSchedule.isAfterCutoff 
+                  ? `🌙 Placed after 10:00 PM cutoff: Next prep window scheduled for delivery on ${estimatedSchedule.formattedDate} at 8:00 AM.`
+                  : `✅ Placed before 10:00 PM cutoff: Next prep window scheduled for delivery on ${estimatedSchedule.formattedDate} at 8:00 AM.`}
+              </div>
+            </div>
 
             {/* Payment Section */}
             <form onSubmit={handleCheckout} className="bg-white p-6 sm:p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-6">

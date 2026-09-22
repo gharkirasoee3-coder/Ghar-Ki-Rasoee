@@ -18,8 +18,11 @@ class OrderController {
         );
       }
 
-      // Default delivery date to today if not provided
-      const deliveryDate = rawDeliveryDate || new Date().toISOString().split("T")[0];
+      // Calculate scheduled delivery date based on 10 PM cutoff, 8 AM delivery, Mon-Sat schedule
+      const DeliveryScheduleUtil = require("../utils/deliverySchedule.util");
+      const scheduleInfo = DeliveryScheduleUtil.getNextDeliveryDate(new Date());
+      const deliveryDate = rawDeliveryDate || scheduleInfo.deliveryDate;
+      const deliveryTime = req.body.deliveryTime || scheduleInfo.deliveryTime;
 
       // Calculate Price
       const MenuModel = require("../models/menu.model");
@@ -44,6 +47,9 @@ class OrderController {
         const coupon = await CouponModel.getCoupon(couponCode);
         if (!coupon) {
           return ResponseUtil.error(res, 400, "Invalid coupon code");
+        }
+        if (orderType.toLowerCase() === "one-time" && coupon.duration === "repeating") {
+          return ResponseUtil.error(res, 400, "Recurring subscription coupons cannot be applied to one-time meal orders");
         }
         if (!coupon.isActive) {
           return ResponseUtil.error(res, 400, "This coupon is inactive");
@@ -81,7 +87,9 @@ class OrderController {
       }
 
       let deliveryFee = 0;
-      if (subtotal < deliverySettings.minAmountForFreeDelivery) {
+      // One-time meals always enjoy free delivery
+      const isOneTimeOrder = orderType.toLowerCase() === "one-time";
+      if (!isOneTimeOrder && subtotal < deliverySettings.minAmountForFreeDelivery) {
         deliveryFee = deliverySettings.deliveryFee;
       }
       price += deliveryFee;
@@ -107,6 +115,7 @@ class OrderController {
         price,
         deliveryFee,
         deliveryDate,
+        deliveryTime: deliveryTime || "8:00 AM",
         paymentMethod: req.body.paymentMethod || "Online",
         paymentStatus:
           req.body.paymentMethod === "Cash on Delivery" ? "Pending" : "Paid",

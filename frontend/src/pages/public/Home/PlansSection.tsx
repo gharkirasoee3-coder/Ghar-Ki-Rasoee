@@ -45,7 +45,7 @@ const staticFallbackPlans: Plan[] = [
     key: 'customizable',
     name: 'Build Your Own Plan',
     price: 200,
-    features: ['Fully customizable daily meal choices', 'Customize Roti Count (0 to 12)', 'Choose Sabzi quantity (1 to 3)', 'Configure Raita and Desserts', 'Real-time dynamic pricing'],
+    features: ['Fully customizable daily meal choices', 'Customize Roti & Rice quantity', 'Choose Sabzi quantity (0 to 3)', 'Configure Raita and Desserts', 'Real-time dynamic pricing'],
     popular: false,
     badge: 'Highly Flexible'
   }

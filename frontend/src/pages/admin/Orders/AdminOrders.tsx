@@ -498,16 +498,39 @@ const AdminOrders: React.FC = () => {
                   <div className="hidden xl:flex items-center gap-2 flex-wrap max-w-md">
                     {isOneTime && cd ? (
                       <>
-                        {cd.sabziSet1 && (
-                          <span className="text-xs font-medium bg-gray-100 text-gray-800 px-2.5 py-1 rounded-lg truncate max-w-[160px]" title={cd.sabziSet1}>
-                            🥘 {cd.sabziSet1}
-                          </span>
-                        )}
-                        {cd.sabziSet2 && (
-                          <span className="text-xs font-medium bg-gray-100 text-gray-800 px-2.5 py-1 rounded-lg truncate max-w-[160px]" title={cd.sabziSet2}>
-                            🍲 {cd.sabziSet2}
-                          </span>
-                        )}
+                        {(() => {
+                          const breakdown = cd.sabziBreakdown && typeof cd.sabziBreakdown === 'object'
+                            ? Object.entries(cd.sabziBreakdown).filter(([_, c]) => typeof c === 'number' && c > 0)
+                            : [];
+                          if (breakdown.length > 0) {
+                            return breakdown.map(([dish, count]) => (
+                              <span key={dish} className="text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200/60 px-2.5 py-1 rounded-lg truncate max-w-[180px]" title={`${count}x ${dish}`}>
+                                🥘 {count}x {dish}
+                              </span>
+                            ));
+                          }
+                          if (cd.selectedSabzi && cd.selectedSabzi !== 'None') {
+                            return (
+                              <span className="text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200/60 px-2.5 py-1 rounded-lg truncate max-w-[200px]" title={cd.selectedSabzi}>
+                                🥘 {cd.selectedSabzi}
+                              </span>
+                            );
+                          }
+                          return (
+                            <>
+                              {cd.sabziSet1 && (
+                                <span className="text-xs font-medium bg-gray-100 text-gray-800 px-2.5 py-1 rounded-lg truncate max-w-[160px]" title={cd.sabziSet1}>
+                                  🥘 {cd.sabziSet1}
+                                </span>
+                              )}
+                              {cd.sabziSet2 && (
+                                <span className="text-xs font-medium bg-gray-100 text-gray-800 px-2.5 py-1 rounded-lg truncate max-w-[160px]" title={cd.sabziSet2}>
+                                  🍲 {cd.sabziSet2}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                         {cd.rotiCount && (
                           <span className="text-xs font-semibold bg-gray-100 text-gray-700 px-2 py-1 rounded-lg">
                             🫓 {cd.rotiCount}
@@ -556,18 +579,41 @@ const AdminOrders: React.FC = () => {
                 </div>
 
                 {/* Mobile / Tablet meal badges preview when collapsed */}
-                {!isExpanded && isOneTime && cd && (cd.sabziSet1 || cd.sabziSet2) && (
+                {!isExpanded && isOneTime && cd && (
                   <div className="mt-3 flex xl:hidden flex-wrap items-center gap-1.5 pt-2 border-t border-gray-100">
-                    {cd.sabziSet1 && (
-                      <span className="text-[11px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                        🥘 {cd.sabziSet1}
-                      </span>
-                    )}
-                    {cd.sabziSet2 && (
-                      <span className="text-[11px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                        🍲 {cd.sabziSet2}
-                      </span>
-                    )}
+                    {(() => {
+                      const breakdown = cd.sabziBreakdown && typeof cd.sabziBreakdown === 'object'
+                        ? Object.entries(cd.sabziBreakdown).filter(([_, c]) => typeof c === 'number' && c > 0)
+                        : [];
+                      if (breakdown.length > 0) {
+                        return breakdown.map(([dish, count]) => (
+                          <span key={dish} className="text-[11px] font-medium bg-amber-50 text-amber-900 border border-amber-200/50 px-2 py-0.5 rounded">
+                            🥘 {count}x {dish}
+                          </span>
+                        ));
+                      }
+                      if (cd.selectedSabzi && cd.selectedSabzi !== 'None') {
+                        return (
+                          <span className="text-[11px] font-medium bg-amber-50 text-amber-900 px-2 py-0.5 rounded">
+                            🥘 {cd.selectedSabzi}
+                          </span>
+                        );
+                      }
+                      return (
+                        <>
+                          {cd.sabziSet1 && (
+                            <span className="text-[11px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                              🥘 {cd.sabziSet1}
+                            </span>
+                          )}
+                          {cd.sabziSet2 && (
+                            <span className="text-[11px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                              🍲 {cd.sabziSet2}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                     {cd.rotiCount && (
                       <span className="text-[11px] font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
                         🫓 {cd.rotiCount} rotis
@@ -611,19 +657,45 @@ const AdminOrders: React.FC = () => {
                             </div>
                           )}
 
-                          {cd.sabziSet1 && (
-                            <div className="p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
-                              <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider block">Sabzi Choice 1</span>
-                              <span className="text-sm font-bold text-gray-900 mt-0.5 block">{cd.sabziSet1}</span>
-                            </div>
-                          )}
+                          {(() => {
+                            const breakdown = cd.sabziBreakdown && typeof cd.sabziBreakdown === 'object'
+                              ? Object.entries(cd.sabziBreakdown).filter(([_, c]) => typeof c === 'number' && c > 0)
+                              : [];
+                            if (breakdown.length > 0) {
+                              return (
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider block">
+                                    Sabzi Selection ({cd.sabziBoxes || breakdown.reduce((a, [_, c]) => a + (Number(c) || 0), 0)} Total Boxes)
+                                  </span>
+                                  {breakdown.map(([dish, count]) => (
+                                    <div key={dish} className="p-2.5 bg-amber-50/60 rounded-xl border border-amber-200/60 flex items-center justify-between">
+                                      <span className="text-xs sm:text-sm font-bold text-gray-900">{dish}</span>
+                                      <span className="text-xs font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md shrink-0">
+                                        {count} Box{Number(count) > 1 ? 'es' : ''}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            return (
+                              <>
+                                {cd.sabziSet1 && (
+                                  <div className="p-2.5 bg-amber-50/50 rounded-xl border border-amber-100">
+                                    <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider block">Sabzi Choice 1</span>
+                                    <span className="text-sm font-bold text-gray-900 mt-0.5 block">{cd.sabziSet1}</span>
+                                  </div>
+                                )}
 
-                          {cd.sabziSet2 && (
-                            <div className="p-2.5 bg-orange-50/50 rounded-xl border border-orange-100">
-                              <span className="text-[10px] font-extrabold text-orange-700 uppercase tracking-wider block">Sabzi Choice 2</span>
-                              <span className="text-sm font-bold text-gray-900 mt-0.5 block">{cd.sabziSet2}</span>
-                            </div>
-                          )}
+                                {cd.sabziSet2 && (
+                                  <div className="p-2.5 bg-orange-50/50 rounded-xl border border-orange-100">
+                                    <span className="text-[10px] font-extrabold text-orange-700 uppercase tracking-wider block">Sabzi Choice 2</span>
+                                    <span className="text-sm font-bold text-gray-900 mt-0.5 block">{cd.sabziSet2}</span>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
 
                           <div className="flex items-center justify-between text-xs py-1.5 px-3 bg-gray-50 rounded-lg">
                             <span className="text-gray-600 font-medium">Rotis Included</span>

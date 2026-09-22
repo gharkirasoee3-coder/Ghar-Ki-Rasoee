@@ -16,12 +16,21 @@ interface PlanConfig {
 interface CustomPricingRules {
   basePrice: number;
   pricePerRoti: number;
+  pricePerRice: number;
   pricePerSabzi: number;
   raitaPrice3Days: number;
   raitaPriceDaily: number;
   dessertPriceWeekly: number;
   dessertPriceDaily: number;
   saturdaySpecialPrice: number;
+  // One-Time Meal Rates & Alignments
+  oneTimeBasePrice?: number;
+  oneTimeBaseRoti?: number;
+  oneTimeBaseSabzi?: number;
+  oneTimePricePerRoti?: number;
+  oneTimePricePerSabzi?: number;
+  oneTimeRaitaPrice?: number;
+  oneTimeDessertPrice?: number;
 }
 
 interface MenuItem {
@@ -198,12 +207,20 @@ const AdminMenu: React.FC = () => {
       updated.customPricingConfig = {
         basePrice: 100,
         pricePerRoti: 5,
+        pricePerRice: 10,
         pricePerSabzi: 20,
         raitaPrice3Days: 10,
         raitaPriceDaily: 20,
         dessertPriceWeekly: 10,
         dessertPriceDaily: 30,
-        saturdaySpecialPrice: 15
+        saturdaySpecialPrice: 15,
+        oneTimeBasePrice: 13,
+        oneTimeBaseRoti: 8,
+        oneTimeBaseSabzi: 2,
+        oneTimePricePerRoti: 0.60,
+        oneTimePricePerSabzi: 3.00,
+        oneTimeRaitaPrice: 2.00,
+        oneTimeDessertPrice: 3.00
       };
     }
     updated.customPricingConfig[key] = value;
@@ -757,9 +774,9 @@ const AdminMenu: React.FC = () => {
                     </div>
                   )}
 
-                  {selectedPlan === 'premium' && (
+                  {selectedPlan === 'premium' && selectedDay === 'wednesday' && (
                     <div className="border border-slate-200 rounded-2xl p-4 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition cursor-pointer select-none">
-                      <label htmlFor="dessert-checkbox" className="text-xs font-bold text-slate-600 cursor-pointer">Include Sweet/Dessert</label>
+                      <label htmlFor="dessert-checkbox" className="text-xs font-bold text-slate-600 cursor-pointer">Include Wednesday Dessert</label>
                       <input
                         type="checkbox"
                         id="dessert-checkbox"
@@ -1140,16 +1157,128 @@ const AdminMenu: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-6">
-              {/* Core pricing parameters */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* One-Time Meal & Instant Add-on Rates */}
+              <div className="p-6 rounded-3xl border-2 border-amber-300/80 bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-white space-y-4 shadow-sm shadow-amber-100/50">
+                <div className="flex items-center justify-between border-b border-amber-200/70 pb-3">
+                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>🍱</span> One-Time Meal Rates
+                  </h4>
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 uppercase tracking-wider">
+                    Single Order
+                  </span>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Base Meal Price</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-slate-450 font-extrabold text-sm">$</span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={config.customPricingConfig?.oneTimeBasePrice ?? 13}
+                        onChange={(e) => updatePricingRule('oneTimeBasePrice', Number(e.target.value))}
+                        className="pl-7 pr-12 py-2 w-full border border-amber-250 rounded-xl font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                      />
+                      <span className="absolute right-3.5 text-slate-450 font-bold text-[10px] uppercase">CAD</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Included Rotis</label>
+                      <input
+                        type="number"
+                        value={config.customPricingConfig?.oneTimeBaseRoti ?? 8}
+                        onChange={(e) => updatePricingRule('oneTimeBaseRoti', Number(e.target.value))}
+                        className="px-3 py-2 w-full border border-amber-250 rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Included Sabzis</label>
+                      <input
+                        type="number"
+                        value={config.customPricingConfig?.oneTimeBaseSabzi ?? 2}
+                        onChange={(e) => updatePricingRule('oneTimeBaseSabzi', Number(e.target.value))}
+                        className="px-3 py-2 w-full border border-amber-250 rounded-xl font-bold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">± Rate / Roti</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={config.customPricingConfig?.oneTimePricePerRoti ?? 0.60}
+                          onChange={(e) => updatePricingRule('oneTimePricePerRoti', Number(e.target.value))}
+                          className="pl-5 pr-7 py-2 w-full border border-amber-250 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                        />
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">± Rate / Sabzi</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={config.customPricingConfig?.oneTimePricePerSabzi ?? 3.00}
+                          onChange={(e) => updatePricingRule('oneTimePricePerSabzi', Number(e.target.value))}
+                          className="pl-5 pr-7 py-2 w-full border border-amber-250 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                        />
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">+ Extra Raita</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={config.customPricingConfig?.oneTimeRaitaPrice ?? 2.00}
+                          onChange={(e) => updatePricingRule('oneTimeRaitaPrice', Number(e.target.value))}
+                          className="pl-5 pr-7 py-2 w-full border border-amber-250 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                        />
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">+ Extra Sweet</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={config.customPricingConfig?.oneTimeDessertPrice ?? 3.00}
+                          onChange={(e) => updatePricingRule('oneTimeDessertPrice', Number(e.target.value))}
+                          className="pl-5 pr-7 py-2 w-full border border-amber-250 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                        />
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly Custom Plan: Core Parameters */}
               <div className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-4">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide border-l-2 border-primary pl-2">
-                  Core Pricing Parameters
+                  Monthly Custom Core
                 </h4>
                 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Base Customizable Price</label>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Base Plan Price</label>
                     <div className="relative flex items-center">
                       <span className="absolute left-3.5 text-slate-450 font-extrabold text-sm">$</span>
                       <input
@@ -1162,116 +1291,113 @@ const AdminMenu: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate Per Roti</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Roti/mo</label>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <span className="absolute left-2 text-slate-400 font-bold text-[11px]">$</span>
                         <input
                           type="number"
                           value={config.customPricingConfig?.pricePerRoti ?? 5}
                           onChange={(e) => updatePricingRule('pricePerRoti', Number(e.target.value))}
-                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          className="pl-4 pr-6 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                         />
-                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Rate Per Sabzi</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Rice/mo</label>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <span className="absolute left-2 text-slate-400 font-bold text-[11px]">$</span>
+                        <input
+                          type="number"
+                          value={config.customPricingConfig?.pricePerRice ?? 10}
+                          onChange={(e) => updatePricingRule('pricePerRice', Number(e.target.value))}
+                          className="pl-4 pr-6 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Sabzi/mo</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-2 text-slate-400 font-bold text-[11px]">$</span>
                         <input
                           type="number"
                           value={config.customPricingConfig?.pricePerSabzi ?? 20}
                           onChange={(e) => updatePricingRule('pricePerSabzi', Number(e.target.value))}
-                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          className="pl-4 pr-6 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                         />
-                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Supplement Rates */}
+              {/* Monthly Custom Plan: Supplements */}
               <div className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-4">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide border-l-2 border-primary pl-2">
-                  Supplement &amp; Special Rates
+                  Monthly Supplements
                 </h4>
                 
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Raita (3 Days/Wk)</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Raita (3 Days)</label>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
                         <input
                           type="number"
                           value={config.customPricingConfig?.raitaPrice3Days ?? 10}
                           onChange={(e) => updatePricingRule('raitaPrice3Days', Number(e.target.value))}
-                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          className="pl-5 pr-7 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                         />
-                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Raita (Daily)</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Raita (Daily)</label>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
                         <input
                           type="number"
                           value={config.customPricingConfig?.raitaPriceDaily ?? 20}
                           onChange={(e) => updatePricingRule('raitaPriceDaily', Number(e.target.value))}
-                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          className="pl-5 pr-7 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                         />
-                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Dessert (Weekly)</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Wed Dessert</label>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
                         <input
                           type="number"
                           value={config.customPricingConfig?.dessertPriceWeekly ?? 10}
                           onChange={(e) => updatePricingRule('dessertPriceWeekly', Number(e.target.value))}
-                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          className="pl-5 pr-7 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                         />
-                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Dessert (Daily)</label>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1 truncate">Sat Special</label>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
+                        <span className="absolute left-2.5 text-slate-400 font-bold text-xs">$</span>
                         <input
                           type="number"
-                          value={config.customPricingConfig?.dessertPriceDaily ?? 30}
-                          onChange={(e) => updatePricingRule('dessertPriceDaily', Number(e.target.value))}
-                          className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                          value={config.customPricingConfig?.saturdaySpecialPrice ?? 15}
+                          onChange={(e) => updatePricingRule('saturdaySpecialPrice', Number(e.target.value))}
+                          className="pl-5 pr-7 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                         />
-                        <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                        <span className="absolute right-2 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
                       </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Saturday Special Premium</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3.5 text-slate-400 font-extrabold text-sm">$</span>
-                      <input
-                        type="number"
-                        value={config.customPricingConfig?.saturdaySpecialPrice ?? 15}
-                        onChange={(e) => updatePricingRule('saturdaySpecialPrice', Number(e.target.value))}
-                        className="pl-7 pr-12 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                      />
-                      <span className="absolute right-3.5 text-slate-400 font-bold text-[10px] uppercase">CAD</span>
                     </div>
                   </div>
                 </div>
@@ -1280,7 +1406,7 @@ const AdminMenu: React.FC = () => {
               {/* Global Delivery Fee Settings */}
               <div className="p-6 rounded-3xl border border-slate-200 bg-slate-50/50 space-y-4">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide border-l-2 border-primary pl-2">
-                  Global Fallback Delivery Settings
+                  Global Delivery Settings
                 </h4>
                 
                 <div className="space-y-3">
@@ -1292,11 +1418,10 @@ const AdminMenu: React.FC = () => {
                         type="number"
                         value={config.deliveryFeeSettings?.minAmountForFreeDelivery ?? 150}
                         onChange={(e) => updateDeliverySetting('minAmountForFreeDelivery', Number(e.target.value))}
-                        className="pl-6 pr-10 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                       />
-                      <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      <span className="absolute right-3 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">Fallback threshold applied if not overridden by city category.</p>
                   </div>
 
                   <div>
@@ -1307,11 +1432,10 @@ const AdminMenu: React.FC = () => {
                         type="number"
                         value={config.deliveryFeeSettings?.deliveryFee ?? 15}
                         onChange={(e) => updateDeliverySetting('deliveryFee', Number(e.target.value))}
-                        className="pl-6 pr-10 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                        className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                       />
-                      <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
+                      <span className="absolute right-3 text-slate-400 font-bold text-[8px] uppercase">CAD</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">Default flat delivery fee for orders below the threshold.</p>
                   </div>
                 </div>
               </div>

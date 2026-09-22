@@ -147,6 +147,165 @@ class AuthController {
     }
   }
 
+  /**
+   * Send OTP for Password Reset
+   */
+  static async sendForgotPasswordOtp(req, res) {
+    try {
+      const { email } = req.body;
+      console.log(`[sendForgotPasswordOtp] Start process for: ${email}`);
+
+      if (!email) {
+        return ResponseUtil.error(res, 400, "Email is required");
+      }
+
+      // 1. Verify user exists in Firebase Auth
+      try {
+        await admin.auth().getUserByEmail(email);
+      } catch (err) {
+        if (err.code === 'auth/user-not-found') {
+          return ResponseUtil.error(res, 404, "No account found with this email address. Please check your email or register.");
+        }
+        console.error("Firebase auth check error:", err);
+      }
+
+      // 2. Generate random 6-digit OTP code
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      console.log(`[sendForgotPasswordOtp] Generated Reset OTP: ${otp} for ${email}`);
+
+      // 3. Save OTP to Firestore
+      await OtpModel.saveOtp(email, otp);
+
+      // 4. Prepare Email Content
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const fromEmail = process.env.FROM_EMAIL || "Ghar Ki Rasoee <noreply@gharkirasoee.ca>";
+
+      const htmlContent = `
+        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
+          <h2 style="color: #CB202D; text-align: center; font-size: 24px; margin-bottom: 5px;">Ghar Ki Rasoee</h2>
+          <p style="text-align: center; color: #696969; font-size: 14px; margin-top: 0;">Password Reset Request</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="color: #1c1c1c; font-size: 15px;">Hello,</p>
+          <p style="color: #1c1c1c; font-size: 15px; line-height: 1.5;">We received a request to reset your password for your <strong>Ghar Ki Rasoee</strong> account. Please use the verification code below to proceed:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #CB202D; background-color: #fef2f2; padding: 12px 24px; border-radius: 8px; border: 1px solid #fecaca; display: inline-block;">
+              ${otp}
+            </span>
+          </div>
+          <p style="font-size: 13px; color: #696969; line-height: 1.4;">This code is valid for <strong>10 minutes</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="font-size: 11px; color: #a1a1a1; text-align: center; margin: 0;">© 2026 Ghar Ki Rasoee. All rights reserved.</p>
+        </div>
+      `;
+
+      // Try Resend API first
+      if (resendApiKey && process.env.NODE_ENV !== "test") {
+        try {
+          await axios.post("https://api.resend.com/emails", {
+            from: fromEmail,
+            to: [email],
+            subject: `${otp} is your Ghar Ki Rasoee Password Reset Code`,
+            html: htmlContent,
+          }, {
+            headers: {
+              Authorization: `Bearer ${resendApiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 10000,
+          });
+          console.log(`[sendForgotPasswordOtp] Successfully sent Reset OTP via Resend to ${email}`);
+          return ResponseUtil.send(res, 200, "Password reset code sent to your email.");
+        } catch (resendError) {
+          const apiError = resendError.response?.data || resendError.message;
+          console.error("[sendForgotPasswordOtp] Error sending OTP via Resend API:", apiError);
+        }
+      }
+
+      // Fallback to SMTP
+      if (!smtpPass) {
+        console.log("\n-----------------------------------------");
+        console.log(`[DEV RESET OTP BYPASS] Password Reset Code for ${email}: ${otp}`);
+        console.log("-----------------------------------------\n");
+        return ResponseUtil.send(res, 200, "Password reset code sent (logged to console in development).");
+      }
+
+      const nodemailer = require("nodemailer");
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 5000,
+        family: 4,
+      });
+
+      await transporter.sendMail({
+        from: `"Ghar Ki Rasoee" <${smtpUser}>`,
+        to: email,
+        subject: `${otp} is your Ghar Ki Rasoee Password Reset Code`,
+        html: htmlContent,
+      });
+
+      console.log(`[sendForgotPasswordOtp] Successfully sent Reset OTP via SMTP to ${email}`);
+      return ResponseUtil.send(res, 200, "Password reset code sent to your email.");
+    } catch (error) {
+      console.error("[sendForgotPasswordOtp] Critical error:", error);
+      return ResponseUtil.error(res, 500, "Failed to send password reset code.", error.message);
+    }
+  }
+
+  /**
+   * Reset Password with Verified OTP
+   */
+  static async resetPasswordWithOtp(req, res) {
+    try {
+      const { email, otp, newPassword } = req.body;
+
+      if (!email || !otp || !newPassword) {
+        return ResponseUtil.error(res, 400, "Email, verification code, and new password are required.");
+      }
+
+      if (typeof newPassword !== 'string' || newPassword.length < 6) {
+        return ResponseUtil.error(res, 400, "New password must be at least 6 characters long.");
+      }
+
+      // 1. Verify the OTP
+      const result = await OtpModel.verifyOtp(email, otp);
+      if (!result.success) {
+        return ResponseUtil.error(res, 400, result.message);
+      }
+
+      // 2. Fetch user from Firebase Auth
+      let userRecord;
+      try {
+        userRecord = await admin.auth().getUserByEmail(email);
+      } catch (err) {
+        return ResponseUtil.error(res, 404, "User account not found.");
+      }
+
+      // 3. Update password in Firebase Auth
+      await admin.auth().updateUser(userRecord.uid, {
+        password: newPassword,
+      });
+
+      // 4. Consume/clean up OTP
+      await OtpModel.consumeOtp(email);
+
+      console.log(`[resetPasswordWithOtp] Successfully reset password for ${email} (UID: ${userRecord.uid})`);
+      return ResponseUtil.send(res, 200, "Password has been reset successfully! You can now log in with your new password.");
+    } catch (error) {
+      console.error("[resetPasswordWithOtp] Critical error:", error);
+      return ResponseUtil.error(res, 500, "Failed to reset password. Please try again.", error.message);
+    }
+  }
+
   static async syncUser(req, res) {
     try {
       const { uid, email, name, picture } = req.user; // From auth middleware

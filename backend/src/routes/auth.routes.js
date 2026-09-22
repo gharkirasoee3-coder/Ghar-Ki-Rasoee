@@ -9,6 +9,10 @@ const { verifyToken } = require("../middlewares/auth.middleware");
 router.post("/send-otp", AuthController.sendOtp);
 router.post("/verify-otp", AuthController.verifyOtp);
 
+// Public Password Reset with OTP routes
+router.post("/forgot-password/send-otp", AuthController.sendForgotPasswordOtp);
+router.post("/forgot-password/reset", AuthController.resetPasswordWithOtp);
+
 // Protect all following auth routes
 router.use(verifyToken);
 

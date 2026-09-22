@@ -62,7 +62,9 @@ class PaymentController {
 
       const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
       let deliveryFee = 0;
-      if (amount < deliverySettings.minAmountForFreeDelivery) {
+      // One-time meals always enjoy free delivery
+      const isOneTime = type && type.toLowerCase() === "one-time";
+      if (!isOneTime && amount < deliverySettings.minAmountForFreeDelivery) {
         deliveryFee = deliverySettings.deliveryFee;
       }
 
@@ -74,6 +76,9 @@ class PaymentController {
         const coupon = await CouponModel.getCoupon(couponCode);
         if (!coupon) {
           return ResponseUtil.error(res, 400, "Invalid coupon code");
+        }
+        if (isOneTime && coupon.duration === "repeating") {
+          return ResponseUtil.error(res, 400, "Recurring subscription coupons cannot be applied to one-time meal orders");
         }
         if (!coupon.isActive) {
           return ResponseUtil.error(res, 400, "This coupon is inactive");
@@ -117,6 +122,11 @@ class PaymentController {
       const isSubscriptionMode = type === "subscription" && isRecurring;
       const stripeAmount = isSubscriptionMode ? amount : finalAmount;
 
+      const DeliveryScheduleUtil = require("../utils/deliverySchedule.util");
+      const scheduleInfo = DeliveryScheduleUtil.getNextDeliveryDate(new Date());
+      const scheduledDeliveryDate = deliveryDate || scheduleInfo.deliveryDate;
+      const scheduledDeliveryTime = req.body.deliveryTime || scheduleInfo.deliveryTime;
+
       const session = await StripeService.createCheckoutSession({
         userId: uid,
         userEmail: email || userData.email,
@@ -126,7 +136,8 @@ class PaymentController {
         planName,
         deliveryAddress,
         city,
-        deliveryDate,
+        deliveryDate: scheduledDeliveryDate,
+        deliveryTime: scheduledDeliveryTime,
         items,
         successUrl,
         cancelUrl,
@@ -335,6 +346,9 @@ class PaymentController {
         console.error("Failed to parse customDetails from metadata:", e);
       }
 
+      const DeliveryScheduleUtil = require("../utils/deliverySchedule.util");
+      const scheduleInfo = DeliveryScheduleUtil.getNextDeliveryDate(new Date());
+
       const orderData = {
         userId,
         customerName: userData.displayName || userData.email || "Unknown Customer",
@@ -347,7 +361,8 @@ class PaymentController {
         customDetails: parsedCustomDetails,
         notes: notes || null,
         price: session.amount_total / 100,
-        deliveryDate,
+        deliveryDate: deliveryDate || scheduleInfo.deliveryDate,
+        deliveryTime: session.metadata.deliveryTime || "8:00 AM",
         paymentMethod: "Stripe",
         paymentStatus: "Paid",
         stripeSessionId: session.id,

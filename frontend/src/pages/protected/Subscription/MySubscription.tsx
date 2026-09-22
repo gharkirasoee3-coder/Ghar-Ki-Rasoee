@@ -519,11 +519,11 @@ const MySubscription: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-text-secondary">Delivery Time</span>
-                    <span className="font-medium">6:00 PM</span>
+                    <span className="font-medium">8:00 AM</span>
                   </div>
                   <div className="flex justify-between py-2">
                     <span className="text-text-secondary">Exclusions</span>
-                    <span className="font-medium">Sundays & Holidays</span>
+                    <span className="font-medium">Sundays</span>
                   </div>
                 </div>
               </div>
@@ -639,7 +639,7 @@ const MySubscription: React.FC = () => {
               <ul className="space-y-2 text-sm text-yellow-800">
                 <li className="flex items-start gap-2">
                   <span className="text-yellow-600 font-bold">•</span>
-                  <span><strong>Cutoff Time:</strong> You can skip tomorrow's delivery if you request before 11:59 PM today.</span>
+                  <span><strong>Cutoff Time:</strong> You can skip tomorrow's delivery if you request before 10:00 PM today.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-yellow-600 font-bold">•</span>

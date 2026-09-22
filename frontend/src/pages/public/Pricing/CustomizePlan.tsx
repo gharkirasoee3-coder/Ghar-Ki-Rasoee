@@ -10,6 +10,7 @@ import { useCity } from '../../../context/CityContext';
 interface CustomPricingConfig {
   basePrice: number;
   pricePerRoti: number;
+  pricePerRice: number;
   pricePerSabzi: number;
   raitaPrice3Days: number;
   raitaPriceDaily: number;
@@ -34,15 +35,17 @@ const CustomizePlan: React.FC = () => {
   
   // Custom Plan State
   const [roti, setRoti] = useState(8);
+  const [rice, setRice] = useState(0);
   const [sabziChoices, setSabziChoices] = useState(2);
   const [raitaOption, setRaitaOption] = useState<'none' | '3days' | 'daily'>('3days');
-  const [dessertOption, setDessertOption] = useState<'none' | 'weekly' | 'daily'>('none');
+  const [dessertOption, setDessertOption] = useState<'none' | 'weekly'>('none');
   const [saturdaySpecial, setSaturdaySpecial] = useState(false);
 
   // Pricing rules
   const [pricingConfig, setPricingConfig] = useState<CustomPricingConfig>({
     basePrice: 100,
     pricePerRoti: 5,
+    pricePerRice: 10,
     pricePerSabzi: 20,
     raitaPrice3Days: 10,
     raitaPriceDaily: 20,
@@ -79,18 +82,21 @@ const CustomizePlan: React.FC = () => {
     if (mode === 'existing') {
       if (basePlan === 'basic') {
         setRoti(4);
+        setRice(0);
         setSabziChoices(1);
         setRaitaOption('3days');
         setDessertOption('none');
         setSaturdaySpecial(false);
       } else if (basePlan === 'standard') {
         setRoti(8);
+        setRice(0);
         setSabziChoices(2);
         setRaitaOption('3days');
         setDessertOption('none');
         setSaturdaySpecial(false);
       } else if (basePlan === 'premium') {
         setRoti(8);
+        setRice(0);
         setSabziChoices(2);
         setRaitaOption('daily');
         setDessertOption('weekly');
@@ -99,6 +105,7 @@ const CustomizePlan: React.FC = () => {
     } else {
       // From Scratch Defaults
       setRoti(6);
+      setRice(0);
       setSabziChoices(2);
       setRaitaOption('3days');
       setDessertOption('none');
@@ -112,22 +119,23 @@ const CustomizePlan: React.FC = () => {
     return 0;
   };
 
-  const getDessertPrice = (opt: 'none' | 'weekly' | 'daily') => {
-    if (opt === 'daily') return pricingConfig.dessertPriceDaily;
+  const getDessertPrice = (opt: 'none' | 'weekly') => {
     if (opt === 'weekly') return pricingConfig.dessertPriceWeekly;
     return 0;
   };
 
   // Price Calculation Logic (matches backend exactly)
   const calculatePrice = () => {
+    const riceRate = pricingConfig.pricePerRice || 10;
     if (mode === 'scratch') {
       const base = pricingConfig.basePrice;
       const rotiPrice = roti * pricingConfig.pricePerRoti;
+      const ricePrice = rice * riceRate;
       const sabziPrice = sabziChoices * pricingConfig.pricePerSabzi;
       const raitaPrice = getRaitaPrice(raitaOption);
       const dessertPrice = getDessertPrice(dessertOption);
       const satSpecialPrice = saturdaySpecial ? pricingConfig.saturdaySpecialPrice : 0;
-      return base + rotiPrice + sabziPrice + raitaPrice + dessertPrice + satSpecialPrice;
+      return base + rotiPrice + ricePrice + sabziPrice + raitaPrice + dessertPrice + satSpecialPrice;
     } else {
       const planKey = basePlan;
       const planInfo = plans[planKey];
@@ -135,25 +143,29 @@ const CustomizePlan: React.FC = () => {
 
       let baseRoti = 8;
       let baseSabzi = 2;
+      let baseRice = 0;
       let baseRaita: 'none' | '3days' | 'daily' = '3days';
-      let baseDessert: 'none' | 'weekly' | 'daily' = 'none';
+      let baseDessert: 'none' | 'weekly' = 'none';
       let baseSaturday = false;
 
       if (planKey === 'basic') {
         baseRoti = 4;
         baseSabzi = 1;
+        baseRice = 0;
         baseRaita = '3days';
         baseDessert = 'none';
         baseSaturday = false;
       } else if (planKey === 'standard') {
         baseRoti = 8;
         baseSabzi = 2;
+        baseRice = 0;
         baseRaita = '3days';
         baseDessert = 'none';
         baseSaturday = false;
       } else if (planKey === 'premium') {
         baseRoti = 8;
         baseSabzi = 2;
+        baseRice = 0;
         baseRaita = 'daily';
         baseDessert = 'weekly';
         baseSaturday = true;
@@ -161,12 +173,13 @@ const CustomizePlan: React.FC = () => {
 
       const planBasePrice = planInfo.price;
       const rotiDiff = (roti - baseRoti) * pricingConfig.pricePerRoti;
+      const riceDiff = (rice - baseRice) * riceRate;
       const sabziDiff = (sabziChoices - baseSabzi) * pricingConfig.pricePerSabzi;
       const raitaDiff = getRaitaPrice(raitaOption) - getRaitaPrice(baseRaita);
       const dessertDiff = getDessertPrice(dessertOption) - getDessertPrice(baseDessert);
       const satSpecialDiff = (saturdaySpecial ? pricingConfig.saturdaySpecialPrice : 0) - (baseSaturday ? pricingConfig.saturdaySpecialPrice : 0);
 
-      return planBasePrice + rotiDiff + sabziDiff + raitaDiff + dessertDiff + satSpecialDiff;
+      return planBasePrice + rotiDiff + riceDiff + sabziDiff + raitaDiff + dessertDiff + satSpecialDiff;
     }
   };
 
@@ -174,14 +187,15 @@ const CustomizePlan: React.FC = () => {
 
   const handleCheckout = () => {
     const formattedRaita = raitaOption === 'none' ? 'No Raita or Salad' : raitaOption === '3days' ? 'Raita or Salad 3 Days/Week' : 'Daily Raita or Salad';
-    const formattedDessert = dessertOption === 'none' ? 'No Dessert' : dessertOption === 'weekly' ? 'Weekly Dessert (Wed)' : 'Daily Dessert';
+    const formattedDessert = dessertOption === 'none' ? 'No Wednesday Dessert' : 'Wednesday Sweet/Dessert Included';
 
     const customPlan = {
       name: 'Custom Plan',
       price: totalPrice,
       features: [
         `${roti} Tawa Roti per delivery`,
-        sabziChoices === 0 ? 'No Sabzi' : `${sabziChoices} Sabzi choice(s) per delivery`,
+        rice === 0 ? 'No Rice' : `${rice} Rice Bowl(s) per delivery`,
+        sabziChoices === 0 ? 'No Sabzi' : `${sabziChoices} Sabzi Box(es) per delivery`,
         formattedRaita,
         formattedDessert,
         saturdaySpecial ? 'Saturday Special Food + Dessert' : 'No Saturday Special',
@@ -191,6 +205,7 @@ const CustomizePlan: React.FC = () => {
       customDetails: {
         basePlan: mode === 'existing' ? basePlan : 'scratch',
         roti,
+        rice,
         sabziChoices,
         raitaOption,
         dessertOption,
@@ -292,63 +307,160 @@ const CustomizePlan: React.FC = () => {
 
             {/* Roti Count */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <label className="block text-base font-bold text-text-primary">Daily Roti Quantity</label>
                   <span className="text-xs text-text-secondary">Fresh wheat tawa roti made fresh daily</span>
                 </div>
-                <span className="text-2xl font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full">{roti} Roti</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Custom Count:</span>
+                  <div className="flex items-center bg-white border-2 border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 rounded-xl shadow-xs px-2.5 py-1 transition-all">
+                    <input
+                      type="number"
+                      min="0"
+                      value={roti === 0 ? '' : roti}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                        setRoti(isNaN(val) ? 0 : Math.max(0, val));
+                      }}
+                      className="w-16 text-center font-black text-lg text-text-primary bg-transparent focus:outline-none"
+                    />
+                    <span className="text-xs font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded-md">Rotis</span>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <button
+                  type="button"
                   onClick={() => setRoti(prev => Math.max(0, prev - 2))}
                   disabled={roti <= 0}
-                  className="w-12 h-12 rounded-xl border border-gray-300 flex items-center justify-center font-bold text-xl hover:bg-gray-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center font-bold text-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-xs disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                 >
                   -
                 </button>
                 <input
                   type="range"
                   min="0"
-                  max="40"
-                  step="2"
+                  max={Math.max(40, roti + 10)}
+                  step="1"
                   value={roti}
                   onChange={(e) => setRoti(Number(e.target.value))}
                   className="flex-1 accent-primary h-2 bg-gray-200 rounded-lg cursor-pointer"
                 />
                 <button
-                  onClick={() => setRoti(prev => Math.min(40, prev + 2))}
-                  disabled={roti >= 40}
-                  className="w-12 h-12 rounded-xl border border-gray-300 flex items-center justify-center font-bold text-xl hover:bg-gray-50 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                  type="button"
+                  onClick={() => setRoti(prev => prev + 2)}
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center font-bold text-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-xs shrink-0"
                 >
                   +
                 </button>
               </div>
             </div>
 
-            {/* Sabzi Choices */}
+            {/* Rice Quantity */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <label className="block text-base font-bold text-text-primary">Daily Sabzi Selection</label>
-                  <span className="text-xs text-text-secondary">Choose how many distinct dishes you receive daily</span>
+                  <label className="block text-base font-bold text-text-primary">Daily Rice Quantity</label>
+                  <span className="text-xs text-text-secondary">Steamed aromatic Basmati or Jeera rice bowl</span>
                 </div>
-                <span className="text-2xl font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full">{sabziChoices === 0 ? 'None' : `${sabziChoices} Choice${sabziChoices > 1 ? 's' : ''}`}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Custom Count:</span>
+                  <div className="flex items-center bg-white border-2 border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 rounded-xl shadow-xs px-2.5 py-1 transition-all">
+                    <input
+                      type="number"
+                      min="0"
+                      value={rice === 0 ? '' : rice}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                        setRice(isNaN(val) ? 0 : Math.max(0, val));
+                      }}
+                      className="w-16 text-center font-black text-lg text-text-primary bg-transparent focus:outline-none"
+                    />
+                    <span className="text-xs font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded-md">Bowls</span>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-4 gap-3">
-                {[0, 1, 2, 3].map((choice) => (
-                  <button
-                    key={choice}
-                    onClick={() => setSabziChoices(choice)}
-                    className={`py-3.5 rounded-xl border-2 transition text-center font-bold text-sm md:text-base ${
-                      sabziChoices === choice
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-gray-200 hover:border-gray-300 text-text-secondary'
-                    }`}
-                  >
-                    {choice === 0 ? 'None' : `${choice} Sabzi${choice > 1 ? 's' : ''}`}
-                  </button>
-                ))}
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setRice(prev => Math.max(0, prev - 1))}
+                  disabled={rice <= 0}
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center font-bold text-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-xs disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                >
+                  -
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max={Math.max(10, rice + 5)}
+                  step="1"
+                  value={rice}
+                  onChange={(e) => setRice(Number(e.target.value))}
+                  className="flex-1 accent-primary h-2 bg-gray-200 rounded-lg cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => setRice(prev => prev + 1)}
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center font-bold text-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-xs shrink-0"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Sabzi Quantity (Boxes) */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="block text-base font-bold text-text-primary">Daily Sabzi Quantity</label>
+                  <span className="text-xs text-text-secondary">Freshly cooked homestyle sabzi containers (boxes) per delivery</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Custom Count:</span>
+                  <div className="flex items-center bg-white border-2 border-primary/40 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 rounded-xl shadow-xs px-2.5 py-1 transition-all">
+                    <input
+                      type="number"
+                      min="0"
+                      value={sabziChoices === 0 ? '' : sabziChoices}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                        setSabziChoices(isNaN(val) ? 0 : Math.max(0, val));
+                      }}
+                      className="w-16 text-center font-black text-lg text-text-primary bg-transparent focus:outline-none"
+                    />
+                    <span className="text-xs font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded-md">Boxes</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setSabziChoices(prev => Math.max(0, prev - 1))}
+                  disabled={sabziChoices <= 0}
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center font-bold text-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-xs disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                >
+                  -
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max={Math.max(6, sabziChoices + 3)}
+                  step="1"
+                  value={sabziChoices}
+                  onChange={(e) => setSabziChoices(Number(e.target.value))}
+                  className="flex-1 accent-primary h-2 bg-gray-200 rounded-lg cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSabziChoices(prev => prev + 1)}
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 bg-white flex items-center justify-center font-bold text-xl hover:bg-gray-50 hover:border-gray-300 transition shadow-xs shrink-0"
+                >
+                  +
+                </button>
               </div>
             </div>
 
@@ -378,24 +490,32 @@ const CustomizePlan: React.FC = () => {
             {/* Dessert Selection */}
             <div className="space-y-4">
               <div>
-                <label className="block text-base font-bold text-text-primary">Dessert Option</label>
-                <span className="text-xs text-text-secondary">Sweet Indian desserts (Kheer, Gulab Jamun, Halwa, etc.)</span>
+                <label className="block text-base font-bold text-text-primary">Wednesday Dessert Option</label>
+                <span className="text-xs text-text-secondary">Sweet Indian desserts served on Wednesdays (Kheer, Gulab Jamun, Halwa, etc.)</span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {(['none', 'weekly', 'daily'] as const).map((opt) => (
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { key: 'none', label: 'No Dessert', sublabel: '$0 CAD' },
+                  { key: 'weekly', label: 'Wednesday Dessert', sublabel: `+$${pricingConfig.dessertPriceWeekly || 10} CAD` }
+                ].map((opt) => (
                   <button
-                    key={opt}
-                    onClick={() => setDessertOption(opt)}
-                    className={`py-3.5 rounded-xl border-2 transition text-center font-bold text-sm md:text-base capitalize ${
-                      dessertOption === opt
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-gray-200 hover:border-gray-300 text-text-secondary'
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setDessertOption(opt.key as 'none' | 'weekly')}
+                    className={`py-3.5 px-4 rounded-xl border-2 transition text-center flex flex-col items-center justify-center ${
+                      dessertOption === opt.key
+                        ? 'border-primary bg-primary/5 text-primary shadow-xs'
+                        : 'border-gray-200 hover:border-gray-300 text-text-secondary bg-white'
                     }`}
                   >
-                    {opt === 'none' ? 'None' : opt === 'weekly' ? 'Weekly (Wed)' : 'Daily'}
+                    <span className="font-bold text-sm md:text-base">{opt.label}</span>
+                    <span className="text-xs text-slate-500 mt-0.5">{opt.sublabel}</span>
                   </button>
                 ))}
               </div>
+              <p className="text-[11px] text-slate-500">
+                ✨ Weekend dessert is included separately with the <strong>Saturday Chef&apos;s Special</strong> below.
+              </p>
             </div>
 
             {/* Saturday Special Toggle */}
@@ -403,7 +523,7 @@ const CustomizePlan: React.FC = () => {
               <div className="flex gap-3">
                 <span className="text-3xl">🎉</span>
                 <div>
-                  <h4 className="font-bold text-orange-950 text-base">Saturday Chef's Special</h4>
+                  <h4 className="font-bold text-orange-950 text-base">Saturday Chef&apos;s Special</h4>
                   <p className="text-xs text-orange-800">Includes specialty meals (Paneer tikka, Chole bhature) + sweet</p>
                 </div>
               </div>
@@ -457,9 +577,26 @@ const CustomizePlan: React.FC = () => {
                 )}
               </div>
 
+              {/* Rice Calc */}
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary font-medium">Daily Rice ({rice === 0 ? 'None' : `${rice} bowl${rice > 1 ? 's' : ''}`})</span>
+                {mode === 'scratch' ? (
+                  <span className="font-bold text-text-primary">+${rice * (pricingConfig.pricePerRice || 10)} CAD</span>
+                ) : (
+                  (() => {
+                    const diff = rice * (pricingConfig.pricePerRice || 10);
+                    return (
+                      <span className={`font-bold ${diff > 0 ? 'text-text-primary' : 'text-slate-500'}`}>
+                        {diff > 0 ? `+$${diff}` : '$0'} CAD
+                      </span>
+                    );
+                  })()
+                )}
+              </div>
+
               {/* Sabzi Choices Calc */}
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary font-medium">Daily Sabzi ({sabziChoices === 0 ? 'None' : `${sabziChoices} choice${sabziChoices > 1 ? 's' : ''}`})</span>
+                <span className="text-text-secondary font-medium">Daily Sabzi ({sabziChoices === 0 ? 'None' : `${sabziChoices} box${sabziChoices > 1 ? 'es' : ''}`})</span>
                 {mode === 'scratch' ? (
                   <span className="font-bold text-text-primary">+${sabziChoices * pricingConfig.pricePerSabzi} CAD</span>
                 ) : (
@@ -495,7 +632,7 @@ const CustomizePlan: React.FC = () => {
 
               {/* Dessert Calc */}
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary font-medium">Dessert Option ({dessertOption === 'none' ? 'None' : dessertOption === 'weekly' ? 'Weekly' : 'Daily'})</span>
+                <span className="text-text-secondary font-medium">Wednesday Dessert ({dessertOption === 'none' ? 'None' : 'Included'})</span>
                 {mode === 'scratch' ? (
                   <span className="font-bold text-text-primary">+${getDessertPrice(dessertOption)} CAD</span>
                 ) : (

@@ -27,6 +27,7 @@ const ViewCustomerCustomization: React.FC = () => {
   const [planType, setPlanType] = useState<'basic' | 'standard' | 'premium' | 'custom'>('standard');
   const [customSpecs, setCustomSpecs] = useState<{
     roti: number;
+    rice: number;
     sabziChoices: number;
     raitaOption: string;
     dessertOption: string;
@@ -63,6 +64,7 @@ const ViewCustomerCustomization: React.FC = () => {
                 setPlanType('custom');
                 setCustomSpecs({
                     roti: Number(details.roti) !== undefined ? Number(details.roti) : 6,
+                    rice: Number(details.rice) || 0,
                     sabziChoices: Number(details.sabziChoices) || 2,
                     raitaOption: details.raitaOption || 'none',
                     dessertOption: details.dessertOption || 'none',
@@ -233,10 +235,15 @@ const ViewCustomerCustomization: React.FC = () => {
             };
 
             const getDessertText = () => {
-              const hasDessert = planType === 'custom'
-                ? (customSpecs?.dessertOption === 'daily' || (customSpecs?.dessertOption === 'weekly' && day === 'wednesday'))
-                : (planType === 'premium' && (day === 'wednesday' || dayMenu.isSaturdaySpecial));
-              return hasDessert ? 'Dessert' : '';
+              if (day === 'saturday') {
+                const isSatSpec = (planType === 'custom' && customSpecs?.saturdaySpecial) || (planType === 'premium' && dayMenu.isSaturdaySpecial);
+                return isSatSpec ? 'Saturday Sweet' : '';
+              }
+              if (day === 'wednesday') {
+                const hasWedDessert = (planType === 'custom' && (customSpecs?.dessertOption === 'weekly' || customSpecs?.dessertOption === 'daily')) || planType === 'premium';
+                return hasWedDessert ? 'Wednesday Sweet' : '';
+              }
+              return '';
             };
 
             // Resolve default sabzi names from menu data
@@ -335,7 +342,7 @@ const ViewCustomerCustomization: React.FC = () => {
                 
                 {isDeliveryDay && (
                   <div className="bg-gray-50/50 px-5 py-3.5 mt-auto border-t border-gray-50 flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-gray-500">
-                      <span>Includes: {getRotiCount()} Roti{getDessertText() ? `, ${getDessertText()}` : ''}</span>
+                      <span>Includes: {getRotiCount()} Roti{customSpecs?.rice ? `, ${customSpecs.rice} Rice` : ''}{getDessertText() ? `, ${getDessertText()}` : ''}</span>
                       <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase border ${
                         getRaitaText() === 'Salad'
                           ? 'bg-orange-50 text-orange-700 border-orange-200'

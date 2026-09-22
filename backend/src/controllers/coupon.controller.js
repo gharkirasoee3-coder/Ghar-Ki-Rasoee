@@ -8,7 +8,7 @@ class CouponController {
    */
   static async validateCoupon(req, res) {
     try {
-      const { code, amount } = req.body;
+      const { code, amount, type, orderType } = req.body;
 
       if (!code) {
         return ResponseUtil.error(res, 400, "Coupon code is required");
@@ -21,6 +21,16 @@ class CouponController {
       const coupon = await CouponModel.getCoupon(code);
       if (!coupon) {
         return ResponseUtil.error(res, 404, "Invalid coupon code");
+      }
+
+      // Check if recurring coupon on one-time meal
+      const isOneTime = (type && type.toLowerCase() === "one-time") || (orderType && orderType.toLowerCase() === "one-time");
+      if (isOneTime && coupon.duration === "repeating") {
+        return ResponseUtil.error(
+          res,
+          400,
+          "Recurring subscription coupons cannot be applied to one-time meal orders"
+        );
       }
 
       // Check if active

@@ -44,6 +44,7 @@ describe("Flexible Subscription Scheduling & Pricing", () => {
       customPricingConfig: {
         basePrice: 100,
         pricePerRoti: 5,
+        pricePerRice: 10,
         pricePerSabzi: 20,
         raitaPrice3Days: 10,
         raitaPriceDaily: 20,
@@ -167,6 +168,43 @@ describe("Flexible Subscription Scheduling & Pricing", () => {
       // Full price = base $100 + roti $30 + sabzi $40 + raita $20 = $190
       // Pro-rated: $190 * (1/6) ≈ $31.67
       expect(price).toBeCloseTo(190 * (1 / 6));
+    });
+
+    it("should calculate custom price with rice portions added from scratch", () => {
+      const customDetails = {
+        roti: 4,
+        rice: 2,
+        sabziChoices: 2,
+        raitaOption: "3days",
+        dessertOption: "none",
+        saturdaySpecial: false,
+        deliveryDays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
+      };
+
+      const price = MenuModel.calculateCustomPrice(customDetails, mockConfig);
+      // base $100 + roti 4*$5=$20 + rice 2*$10=$20 + sabzi 2*$20=$40 + raita 3days $10 = $190
+      expect(price).toBeCloseTo(190);
+    });
+
+    it("should calculate custom price when adding rice to an existing base plan", () => {
+      const customDetails = {
+        basePlan: "Basic",
+        roti: 4,
+        rice: 1, // +1 rice ($10)
+        sabziChoices: 1,
+        deliveryDays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
+      };
+
+      const mockConfigWithPlans = {
+        customPricingConfig: mockConfig.customPricingConfig,
+        plans: {
+          basic: { price: 150 }
+        }
+      };
+
+      const price = MenuModel.calculateCustomPrice(customDetails, mockConfigWithPlans);
+      // base basic $150 + roti diff (4-4)*5=$0 + rice diff (1-0)*10=$10 = $160
+      expect(price).toBeCloseTo(160);
     });
   });
 

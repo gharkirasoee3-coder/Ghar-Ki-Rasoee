@@ -47,6 +47,7 @@ class MenuModel {
           customPricingConfig: {
             basePrice: 100,
             pricePerRoti: 5,
+            pricePerRice: 10,
             pricePerSabzi: 20,
             raitaPrice3Days: 10,
             raitaPriceDaily: 20,
@@ -96,6 +97,25 @@ class MenuModel {
       }
 
       const data = doc.data();
+      data.customPricingConfig = {
+        basePrice: 100,
+        pricePerRoti: 5,
+        pricePerRice: 10,
+        pricePerSabzi: 20,
+        raitaPrice3Days: 10,
+        raitaPriceDaily: 20,
+        dessertPriceWeekly: 10,
+        dessertPriceDaily: 30,
+        saturdaySpecialPrice: 15,
+        oneTimeBasePrice: 13.00,
+        oneTimeBaseRoti: 8,
+        oneTimeBaseSabzi: 2,
+        oneTimePricePerRoti: 0.60,
+        oneTimePricePerSabzi: 3.00,
+        oneTimeRaitaPrice: 2.00,
+        oneTimeDessertPrice: 3.00,
+        ...(data.customPricingConfig || {})
+      };
       if (!data.menuImages) {
         data.menuImages = {
           vancouver: "/For-Vancouver-Burnaby-Richmond-New-Westminster-Langley.jpeg",
@@ -170,12 +190,20 @@ class MenuModel {
         customPricingConfig: {
           basePrice: 100,
           pricePerRoti: 5,
+          pricePerRice: 10,
           pricePerSabzi: 20,
           raitaPrice3Days: 10,
           raitaPriceDaily: 20,
           dessertPriceWeekly: 10,
           dessertPriceDaily: 30,
-          saturdaySpecialPrice: 15
+          saturdaySpecialPrice: 15,
+          oneTimeBasePrice: 13.00,
+          oneTimeBaseRoti: 8,
+          oneTimeBaseSabzi: 2,
+          oneTimePricePerRoti: 0.60,
+          oneTimePricePerSabzi: 3.00,
+          oneTimeRaitaPrice: 2.00,
+          oneTimeDessertPrice: 3.00
         },
         deliveryFeeSettings: {
           minAmountForFreeDelivery: 150,
@@ -342,6 +370,7 @@ class MenuModel {
     const rules = { ...(config.customPricingConfig || {
       basePrice: 100,
       pricePerRoti: 5,
+      pricePerRice: 10,
       pricePerSabzi: 20,
       raitaPrice3Days: 10,
       raitaPriceDaily: 20,
@@ -349,6 +378,10 @@ class MenuModel {
       dessertPriceDaily: 30,
       saturdaySpecialPrice: 15
     }) };
+
+    if (rules.pricePerRice === undefined) {
+      rules.pricePerRice = 10;
+    }
 
     if (categoryConfig?.planPrices?.customizableBase !== undefined) {
       rules.basePrice = categoryConfig.planPrices.customizableBase;
@@ -376,11 +409,12 @@ class MenuModel {
     if (!basePlan || basePlan === "scratch") {
       const basePrice = rules.basePrice;
       const rotiPrice = (Number(customDetails.roti) || 0) * rules.pricePerRoti;
+      const ricePrice = (Number(customDetails.rice) || 0) * rules.pricePerRice;
       const sabziPrice = (Number(customDetails.sabziChoices) || 0) * rules.pricePerSabzi;
       const raitaPrice = getRaitaPrice(customDetails.raitaOption);
       const dessertPrice = getDessertPrice(customDetails.dessertOption);
       const satSpecialPrice = customDetails.saturdaySpecial ? rules.saturdaySpecialPrice : 0;
-      basePlanPrice = basePrice + rotiPrice + sabziPrice + raitaPrice + dessertPrice + satSpecialPrice;
+      basePlanPrice = basePrice + rotiPrice + ricePrice + sabziPrice + raitaPrice + dessertPrice + satSpecialPrice;
     } else {
       const planKey = basePlan.toLowerCase();
       const planInfo = config.plans[planKey];
@@ -416,6 +450,7 @@ class MenuModel {
       }
 
       const rotiVal = customDetails.roti !== undefined ? Number(customDetails.roti) : baseRoti;
+      const riceVal = customDetails.rice !== undefined ? Number(customDetails.rice) : 0;
       const sabziVal = customDetails.sabziChoices !== undefined ? Number(customDetails.sabziChoices) : baseSabzi;
       const raitaOpt = customDetails.raitaOption !== undefined ? customDetails.raitaOption : baseRaita;
       const dessertOpt = customDetails.dessertOption !== undefined ? customDetails.dessertOption : baseDessert;
@@ -427,12 +462,13 @@ class MenuModel {
       }
 
       const rotiDiff = (rotiVal - baseRoti) * rules.pricePerRoti;
+      const riceDiff = (riceVal - 0) * rules.pricePerRice;
       const sabziDiff = (sabziVal - baseSabzi) * rules.pricePerSabzi;
       const raitaDiff = getRaitaPrice(raitaOpt) - getRaitaPrice(baseRaita);
       const dessertDiff = getDessertPrice(dessertOpt) - getDessertPrice(baseDessert);
       const satSpecialDiff = (satSpecial ? rules.saturdaySpecialPrice : 0) - (baseSaturday ? rules.saturdaySpecialPrice : 0);
 
-      basePlanPrice = planBasePrice + rotiDiff + sabziDiff + raitaDiff + dessertDiff + satSpecialDiff;
+      basePlanPrice = planBasePrice + rotiDiff + riceDiff + sabziDiff + raitaDiff + dessertDiff + satSpecialDiff;
     }
 
     const deliveryDaysCount = (customDetails.deliveryDays && Array.isArray(customDetails.deliveryDays) && customDetails.deliveryDays.length > 0)
