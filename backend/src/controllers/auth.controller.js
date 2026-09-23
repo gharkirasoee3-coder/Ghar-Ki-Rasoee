@@ -371,7 +371,7 @@ class AuthController {
           name: displayName || "Customer",
           email: email || "",
           picture: picture || "",
-          phone: "N/A",
+          phone: req.user.phone_number || req.user.phoneNumber || "",
           role: (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim()).includes(email) ? "admin" : "customer",
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -408,6 +408,26 @@ class AuthController {
     } catch (error) {
       console.error("Error saving address:", error);
       ResponseUtil.error(res, 500, "Failed to save address", error);
+    }
+  }
+
+  static async updateProfile(req, res) {
+    try {
+      const { uid } = req.user;
+      const { phone, name, address, notes } = req.body;
+
+      const updateData = {};
+      if (phone && phone !== 'N/A') updateData.phone = phone;
+      if (name) updateData.name = name;
+      if (address) updateData.address = address;
+      if (notes) updateData.notes = notes;
+      updateData.updatedAt = new Date().toISOString();
+
+      const user = await UserModel.createOrUpdateUser(uid, updateData);
+      ResponseUtil.send(res, 200, "Profile updated successfully", user);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      ResponseUtil.error(res, 500, "Failed to update profile", error);
     }
   }
 }

@@ -38,6 +38,8 @@ class SubscriptionModel {
         defaultMeal: "Veg", // Default preference
       },
       deliveryAddress: planData.deliveryAddress || "",
+      customerPhone: planData.customerPhone || planData.phone || null,
+      notes: planData.notes || null,
       paymentMethod: planData.paymentMethod || "Online",
       paymentStatus: planData.paymentStatus || "Paid",
       stripeSessionId: planData.stripeSessionId || null,

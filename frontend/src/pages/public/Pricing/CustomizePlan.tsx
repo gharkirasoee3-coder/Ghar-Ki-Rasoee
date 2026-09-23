@@ -191,6 +191,8 @@ const CustomizePlan: React.FC = () => {
 
     const customPlan = {
       name: 'Custom Plan',
+      key: 'custom_plan',
+      custom: true,
       price: totalPrice,
       features: [
         `${roti} Tawa Roti per delivery`,
@@ -203,6 +205,8 @@ const CustomizePlan: React.FC = () => {
         '100% fresh ingredients'
       ],
       customDetails: {
+        isCustomPlan: true,
+        custom: true,
         basePlan: mode === 'existing' ? basePlan : 'scratch',
         roti,
         rice,
@@ -690,12 +694,21 @@ const CustomizePlan: React.FC = () => {
               Proceed to Checkout
             </button>
 
-            {/* Policy Notes */}
-            <div className="flex gap-2.5 text-xs text-text-secondary bg-gray-50 p-4 rounded-xl">
-              <Info size={16} className="text-primary shrink-0 mt-0.5" />
-              <p className="leading-normal">
-                This custom price represents your monthly tiffin plan. Custom choices are configured daily by you. You can adjust your roti/sabzi selections for each day of the week after checkout.
-              </p>
+            {/* Policy & Fee Notes */}
+            <div className="space-y-2">
+              <div className="bg-amber-50/80 border border-amber-200/80 p-3.5 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                </p>
+              </div>
+
+              <div className="flex gap-2.5 text-xs text-text-secondary bg-gray-50 p-3.5 rounded-xl">
+                <Info size={16} className="text-primary shrink-0 mt-0.5" />
+                <p className="leading-normal">
+                  This custom price represents your monthly tiffin plan. Custom choices are configured daily by you. You can adjust your roti/sabzi selections for each day of the week after checkout.
+                </p>
+              </div>
             </div>
           </div>
         </div>

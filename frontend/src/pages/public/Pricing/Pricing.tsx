@@ -6,7 +6,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
-import { X, Check, Loader2, Plus, Minus, Clock, Truck, ArrowRight, Utensils } from 'lucide-react';
+import { X, Check, Loader2, Plus, Minus, Clock, Truck, ArrowRight, Utensils, Info } from 'lucide-react';
 import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
 
 const dayNames: Record<string, string> = {
@@ -599,6 +599,13 @@ const Pricing: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                <div className="mx-6 sm:mx-8 my-4 bg-amber-50/80 border border-amber-200/80 p-3 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                  <Info size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                  <p className="leading-snug">
+                    <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                  </p>
+                </div>
               </div>
 
               {/* Footer Summary */}

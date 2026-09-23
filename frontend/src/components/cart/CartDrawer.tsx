@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCart } from '../../context/CartContext';
-import { X, Plus, Minus, Trash2 } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const CartDrawer: React.FC = () => {
@@ -71,11 +71,19 @@ const CartDrawer: React.FC = () => {
         </div>
 
         {items.length > 0 && (
-          <div className="p-4 border-t border-gray-100 bg-gray-50">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-text-secondary text-lg">Total</span>
+          <div className="p-4 border-t border-gray-100 bg-gray-50 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-text-secondary text-base">Subtotal</span>
               <span className="text-2xl font-bold text-text-primary">${cartTotal.toFixed(2)}</span>
             </div>
+
+            <div className="bg-amber-50/80 border border-amber-200/80 p-2.5 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+              <Info size={14} className="text-amber-600 shrink-0 mt-0.5" />
+              <p className="leading-snug">
+                <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+              </p>
+            </div>
+
             <button 
               onClick={() => {
                 toggleCart();

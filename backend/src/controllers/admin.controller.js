@@ -172,7 +172,7 @@ class AdminController {
                 ...sub,
                 userName: userName || "Customer",
                 userEmail: userData.email || "",
-                userPhone: userData.phone || "N/A",
+                userPhone: sub.customerPhone || sub.phone || (userData.phone && userData.phone !== 'N/A' ? userData.phone : '') || userData.phoneNumber || (userData.auth && userData.auth.phoneNumber) || "N/A",
               };
             }
           } catch (e) {
@@ -241,7 +241,7 @@ class AdminController {
   static async getTodayDeliveries(req, res) {
     try {
       const cachedDeliveries = cache.get("admin_today_deliveries");
-      if (cachedDeliveries) {
+      if (cachedDeliveries && req.query.fresh !== "true") {
         return ResponseUtil.send(
           res,
           200,
@@ -404,13 +404,35 @@ class AdminController {
           : null;
         const orderId = !orderSnapshot.empty ? orderSnapshot.docs[0].id : null;
 
+        const hasMealPreferences = Boolean(
+          customization?.preferences &&
+          Object.values(customization.preferences).some(
+            (dayPref) => dayPref && typeof dayPref === "object" && Object.keys(dayPref).length > 0
+          )
+        );
+        const planLower = (sub.plan || '').toLowerCase();
+        const isStandardTierPlan = planLower === 'basic' || planLower === 'standard' || planLower === 'premium';
+        const isCustomPlan = !isStandardTierPlan && Boolean(
+          planLower.includes("custom") ||
+          planLower.includes("flexible") ||
+          planLower.includes("build your own") ||
+          sub.planDetails?.custom === true ||
+          sub.planDetails?.sabziChoices !== undefined ||
+          sub.planDetails?.roti !== undefined ||
+          sub.planDetails?.rice !== undefined ||
+          sub.customDetails?.roti !== undefined ||
+          sub.customDetails?.sabziChoices !== undefined ||
+          sub.customDetails?.isCustomPlan === true
+        );
+        const isCustomized = hasMealPreferences || isCustomPlan;
+
         deliveries.push({
           subscriptionId: sub.subscriptionId,
           orderId,
           userId: sub.userId,
           customerName,
           email: userData.email,
-          phone: userData.phone || "N/A",
+          phone: sub.customerPhone || sub.phone || (userData.phone && userData.phone !== 'N/A' ? userData.phone : '') || userData.phoneNumber || (userData.auth && userData.auth.phoneNumber) || "N/A",
           address:
             sub.deliveryAddress || userData.address || "No address provided",
           plan: sub.plan,
@@ -423,6 +445,7 @@ class AdminController {
           remainingDays: sub.remainingDays !== undefined ? sub.remainingDays : null,
           paymentStatus: sub.paymentStatus || "Paid",
           subscriptionStatus: sub.status || "Active",
+          isCustomized,
         });
       }
 
@@ -459,6 +482,7 @@ class AdminController {
           }
 
           const custom = order.customDetails || {};
+          const isOneTimeCustom = Boolean(order.customDetails && Object.keys(order.customDetails).length > 0);
           const oneTimeCustomization = {
             meal: "One-Time Meal",
             roti: `${custom.rotiCount || 8} Roti`,
@@ -486,6 +510,7 @@ class AdminController {
             remainingDays: 1,
             paymentStatus: order.paymentStatus || "Paid",
             subscriptionStatus: "One-Time",
+            isCustomized: isOneTimeCustom,
           });
         }
       } catch (err) {

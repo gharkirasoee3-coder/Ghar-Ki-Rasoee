@@ -1,11 +1,12 @@
 import React from 'react';
-import { Instagram, Phone } from 'lucide-react';
+import { Instagram, Phone, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Footer: React.FC = () => {
   return (
     <footer className="bg-white border-t border-gray-100 pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
               <img src="/logo.svg" alt="Ghar Ki Rasoee Logo" className="h-8 w-auto" />
@@ -14,6 +15,24 @@ const Footer: React.FC = () => {
             <p className="mt-4 text-text-secondary text-sm leading-relaxed max-w-sm">
               Serving fresh, home-style Indian meals with love and tradition. No preservatives, just pure taste.
             </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-text-primary mb-4">Quick Links & Policies</h3>
+            <ul className="space-y-2.5 text-sm text-text-secondary">
+              <li>
+                <Link to="/pricing" className="hover:text-primary transition">Meal Subscription Plans</Link>
+              </li>
+              <li>
+                <Link to="/menu" className="hover:text-primary transition">Today's Menu</Link>
+              </li>
+              <li>
+                <Link to="/refund-policy" className="hover:text-primary transition flex items-center gap-1.5 font-medium text-gray-700">
+                  <ShieldCheck size={16} className="text-primary" />
+                  Refund & Cancellation Policy
+                </Link>
+              </li>
+            </ul>
           </div>
           
           <div className="flex flex-col md:items-end">
@@ -51,7 +70,13 @@ const Footer: React.FC = () => {
         
         <div className="border-t border-gray-100 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-text-secondary">
           <p>&copy; {new Date().getFullYear()} Ghar Ki Rasoee. All rights reserved.</p>
-          <p className="mt-2 md:mt-0">Made with ❤️ in Canada</p>
+          <div className="flex items-center gap-4 mt-2 md:mt-0">
+            <Link to="/refund-policy" className="hover:text-primary transition underline text-xs">
+              Refund & Cancellation Policy
+            </Link>
+            <span className="text-gray-300">|</span>
+            <p className="text-xs">Made with ❤️ in Canada</p>
+          </div>
         </div>
       </div>
     </footer>

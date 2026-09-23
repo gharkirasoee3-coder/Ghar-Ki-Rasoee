@@ -19,6 +19,8 @@ router.use(verifyToken);
 router.post("/sync", AuthController.syncUser);
 router.post("/save-address", AuthController.saveAddress);
 router.get("/profile", AuthController.getProfile);
+router.put("/update-profile", AuthController.updateProfile);
+router.post("/update-profile", AuthController.updateProfile);
 
 // Notification routes
 router.get("/notifications", async (req, res) => {

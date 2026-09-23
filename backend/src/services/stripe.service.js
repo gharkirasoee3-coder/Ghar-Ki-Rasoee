@@ -92,6 +92,7 @@ class StripeService {
           replacePlan: replacePlan !== false ? "true" : "false",
           customerPhone: customerPhone || "",
           notes: notes || "",
+          serviceFee: ((Math.round(amountInCents * 0.025) + 30) / 100).toFixed(2),
         },
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -116,6 +117,28 @@ class StripeService {
           };
         }
         sessionData.line_items.push(feeItem);
+      }
+
+      // Automatically charge Platform Service Fee: 2.5% Service Fee + $0.30 Platform Fee
+      const serviceFeeInCents = Math.round(amountInCents * 0.025) + 30;
+      if (serviceFeeInCents > 0) {
+        const serviceFeeItem = {
+          price_data: {
+            currency: "cad",
+            product_data: {
+              name: "Platform Service Fee",
+              description: "2.5% Service Fee + $0.30 Platform Fee",
+            },
+            unit_amount: serviceFeeInCents,
+          },
+          quantity: 1,
+        };
+        if (isSubscriptionMode) {
+          serviceFeeItem.price_data.recurring = {
+            interval: "month",
+          };
+        }
+        sessionData.line_items.push(serviceFeeItem);
       }
 
       if (isSubscriptionMode) {

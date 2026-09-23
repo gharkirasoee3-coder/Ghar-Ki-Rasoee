@@ -6,6 +6,7 @@ import Register from '../pages/public/Register/Register';
 import Home from '../pages/public/Home/Home';
 import Menu from '../pages/public/Menu/Menu';
 import Pricing from '../pages/public/Pricing/Pricing';
+import RefundPolicy from '../pages/public/Legal/RefundPolicy';
 import OrderSuccess from '../pages/protected/Checkout/OrderSuccess';
 import SubscriptionCheckout from '../pages/protected/Checkout/SubscriptionCheckout';
 import PaymentSuccess from '../pages/protected/Checkout/PaymentSuccess';
@@ -52,6 +53,10 @@ const AppRoutes = () => {
         <Route path="/" element={<Home />} />
         <Route path="/menu" element={<Menu />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
+        <Route path="/cancellation-policy" element={<RefundPolicy />} />
+        <Route path="/terms" element={<RefundPolicy />} />
+        <Route path="/terms-of-service" element={<RefundPolicy />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         {/* Cart Checkout Removed */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import PageContainer from '../../../components/layout/PageContainer';
-import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar, Phone, MessageSquare, Clock, Truck } from 'lucide-react';
+import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertTriangle, X, Calendar, Phone, MessageSquare, Clock, Truck, Info } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
@@ -25,6 +25,7 @@ const SubscriptionCheckout: React.FC = () => {
   // Recurring subscription states (only for subscription type plans)
   const [isRecurring, setIsRecurring] = useState(true);
   const [legalConsent, setLegalConsent] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Active subscription checking states
   const [hasActiveSub, setHasActiveSub] = useState(false);
@@ -66,6 +67,33 @@ const SubscriptionCheckout: React.FC = () => {
     minAmountForFreeDelivery: 150,
     deliveryFee: 15
   });
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          const res = await axios.get(`${ENV.API_URL}/auth/profile`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.data?.data) {
+            const profileData = res.data.data;
+            if (profileData.phone && profileData.phone !== 'N/A') {
+              setCustomerPhone((prev) => prev || profileData.phone);
+            } else if (user.phoneNumber) {
+              setCustomerPhone((prev) => prev || user.phoneNumber || '');
+            }
+            if (!address && profileData.address && profileData.address !== 'No address provided') {
+              setAddress(profileData.address);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch user profile in checkout:", err);
+        }
+      }
+    };
+    fetchUserProfile();
+  }, [user]);
 
   useEffect(() => {
     const fetchDeliverySettings = async () => {
@@ -113,7 +141,8 @@ const SubscriptionCheckout: React.FC = () => {
   const basePriceForDelivery = getAdjustedPrice();
   const isFreeDelivery = isOneTime || basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
   const deliveryFee = isFreeDelivery ? 0 : deliverySettings.deliveryFee;
-  const totalAmount = Math.round((finalAmount + deliveryFee) * 100) / 100;
+  const serviceFee = paymentMethod === 'Stripe' ? Math.round((finalAmount * 0.025 + 0.30) * 100) / 100 : 0;
+  const totalAmount = Math.round((finalAmount + deliveryFee + serviceFee) * 100) / 100;
 
   useEffect(() => {
     const checkActiveSubscription = async () => {
@@ -217,6 +246,16 @@ const SubscriptionCheckout: React.FC = () => {
       return;
     }
 
+    if (!termsAccepted) {
+      setError("Please agree to the Terms of Service & Cancellation Policy to proceed.");
+      return;
+    }
+
+    if (!customerPhone || customerPhone.trim().length < 7) {
+      setError("Please enter a valid contact phone number so our delivery driver can reach you.");
+      return;
+    }
+
     if (hasActiveSub && !bypass) {
       setShowWarningModal(true);
       return;
@@ -243,6 +282,13 @@ const SubscriptionCheckout: React.FC = () => {
             basePlan: plan.customDetails?.basePlan || plan.name
           };
 
+      // Auto-sync phone number to user profile
+      await axios.put(
+        `${ENV.API_URL}/auth/update-profile`,
+        { phone: customerPhone.trim(), address },
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).catch(() => {});
+
       if (paymentMethod === 'Stripe') {
         const response = await axios.post(
           `${ENV.API_URL}/payments/create-checkout-session`,
@@ -258,8 +304,8 @@ const SubscriptionCheckout: React.FC = () => {
             items: [{ name: plan.name, quantity: 1, price: getAdjustedPrice() }],
             replacePlan: chosenReplacePlan,
             deliveryFee,
-            customerPhone: customerPhone || undefined,
-            notes: notes || undefined,
+            customerPhone: customerPhone.trim(),
+            notes: notes ? notes.trim() : undefined,
           },
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -287,8 +333,8 @@ const SubscriptionCheckout: React.FC = () => {
               couponCode: appliedCoupon ? appliedCoupon.code : undefined,
               deliveryFee,
               customDetails: customDetailsPayload,
-              customerPhone: customerPhone || undefined,
-              notes: notes || undefined,
+              customerPhone: customerPhone.trim(),
+              notes: notes ? notes.trim() : undefined,
             },
             {
               headers: { Authorization: `Bearer ${token}` },
@@ -319,6 +365,8 @@ const SubscriptionCheckout: React.FC = () => {
               customDetails: customDetailsPayload,
               replacePlan: chosenReplacePlan,
               deliveryFee,
+              customerPhone: customerPhone.trim(),
+              notes: notes ? notes.trim() : undefined,
             },
             {
               headers: { Authorization: `Bearer ${token}` },
@@ -370,21 +418,21 @@ const SubscriptionCheckout: React.FC = () => {
 
   return (
     <PageContainer className="py-6 sm:py-10 md:py-12 px-3 sm:px-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 mb-6 sm:mb-8 text-center tracking-tight px-2">
           {isOneTime ? 'Ready for a One-Time Meal?' : 'Complete Your Subscription'}
         </h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           {/* Plan Summary Sidebar */}
-          <div className="lg:col-span-1 order-2 lg:order-1">
-            <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl lg:sticky lg:top-24">
+          <div className="lg:col-span-5 order-2 lg:order-1">
+            <div className="bg-white p-5 sm:p-7 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl lg:sticky lg:top-24">
               <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">Order Summary</h2>
-              <div className="p-4 sm:p-5 bg-gradient-to-br from-primary/5 to-orange-50 rounded-2xl mb-5">
+              <div className="p-4 sm:p-5 bg-gradient-to-br from-primary/5 to-orange-50 rounded-2xl mb-5 border border-primary/10">
                 <div className="flex justify-between items-center mb-3">
                   <span className="font-bold text-base sm:text-lg text-gray-800">{plan.name}</span>
-                  <span className="font-extrabold text-lg sm:text-xl text-primary">
-                    {isOneTime ? `$${plan.price}` : `$${getAdjustedPrice()}/mo`}
+                  <span className="font-extrabold text-lg sm:text-xl text-primary whitespace-nowrap">
+                    {isOneTime ? `$${plan.price.toFixed(2)} CAD` : `$${getAdjustedPrice().toFixed(2)}/mo CAD`}
                   </span>
                 </div>
                 <ul className="space-y-2 text-xs sm:text-sm text-gray-600 mt-3">
@@ -428,7 +476,7 @@ const SubscriptionCheckout: React.FC = () => {
                       <span className="font-bold text-xs text-green-800 tracking-wider uppercase block">
                         {appliedCoupon.code} Applied
                       </span>
-                      <span className="text-[10px] text-green-600 font-medium">
+                      <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">
                         {appliedCoupon.discountType === 'percentage' 
                           ? `${appliedCoupon.discountValue}% discount` 
                           : `$${appliedCoupon.discountValue.toFixed(2)} CAD discount`}
@@ -502,52 +550,84 @@ const SubscriptionCheckout: React.FC = () => {
                 )}
               </div>
 
-              <div className="border-t border-gray-100 pt-4 mt-4 space-y-2">
+              <div className="border-t border-gray-100 pt-4 mt-4 space-y-2.5">
                 <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
-                  <span>Subtotal</span>
-                  <span className="font-semibold">${getAdjustedPrice().toFixed(2)} CAD</span>
+                  <span className="font-medium">Subtotal</span>
+                  <span className="font-semibold text-gray-900 whitespace-nowrap">${getAdjustedPrice().toFixed(2)} CAD</span>
                 </div>
 
                 {appliedCoupon && (
                   <div className="flex justify-between items-center text-xs sm:text-sm font-semibold text-green-600">
                     <span>Discount ({appliedCoupon.code})</span>
-                    <span>-${discountAmount.toFixed(2)} CAD</span>
+                    <span className="whitespace-nowrap">-${discountAmount.toFixed(2)} CAD</span>
                   </div>
                 )}
 
                 <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
-                  <span>Delivery Fee</span>
+                  <span className="font-medium">Delivery Fee</span>
                   {deliveryFee > 0 ? (
-                    <span className="font-semibold text-orange-600">+${deliveryFee.toFixed(2)} CAD</span>
+                    <span className="font-semibold text-orange-600 whitespace-nowrap">+${deliveryFee.toFixed(2)} CAD</span>
                   ) : (
-                    <span className="font-bold text-green-600">FREE</span>
+                    <span className="font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md text-xs">FREE</span>
                   )}
                 </div>
 
+                {paymentMethod === 'Stripe' && (
+                  <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
+                    <span className="flex items-center gap-1 font-medium">
+                      <span>Platform Service Fee</span>
+                      <span className="text-[10px] text-gray-400 font-normal">(2.5% + $0.30)</span>
+                    </span>
+                    <span className="font-semibold text-gray-900 whitespace-nowrap">+${serviceFee.toFixed(2)} CAD</span>
+                  </div>
+                )}
+
                 {deliveryFee > 0 && (
-                  <p className="text-[10px] text-gray-400 font-bold leading-normal">
+                  <p className="text-[10px] text-gray-400 font-bold leading-normal pt-1">
                     Add ${(deliverySettings.minAmountForFreeDelivery - basePriceForDelivery).toFixed(2)} CAD more to unlock free delivery (minimum ${deliverySettings.minAmountForFreeDelivery} CAD).
                   </p>
                 )}
               </div>
 
-              <div className="flex justify-between items-center font-bold text-base sm:text-lg border-t pt-4 mt-4">
-                <span className="text-gray-700">Total</span>
-                <span className="text-lg sm:text-xl text-gray-950 font-black">
-                  ${totalAmount.toFixed(2)} CAD
-                </span>
+              <div className="flex justify-between items-center border-t border-gray-200 pt-4 mt-4">
+                <div>
+                  <span className="text-base sm:text-lg font-black text-gray-900 block">Total Due</span>
+                  <span className="text-[11px] sm:text-xs text-gray-400 font-medium">All fees & taxes included</span>
+                </div>
+                <div className="text-right">
+                  <div className="inline-flex items-baseline justify-end gap-1.5 whitespace-nowrap">
+                    <span className="text-2xl sm:text-3xl font-black text-gray-950 font-mono tracking-tight">
+                      ${totalAmount.toFixed(2)}
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-gray-500 uppercase tracking-wider">CAD</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
+                <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                </p>
               </div>
 
               {appliedCoupon && appliedCoupon.duration === 'repeating' && (
-                <p className="text-[10px] text-gray-400 font-bold text-right mt-1.5 leading-snug">
-                  Charges automatically renew at ${(getAdjustedPrice() + deliveryFee).toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
+                <p className="text-[10px] text-gray-400 font-bold text-right mt-2 leading-snug">
+                  Charges automatically renew at ${(getAdjustedPrice() + deliveryFee + (paymentMethod === 'Stripe' ? Math.round((getAdjustedPrice() * 0.025 + 0.30) * 100) / 100 : 0)).toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
                 </p>
               )}
+
+              <p className="text-[11px] text-gray-500 text-center mt-3 font-medium">
+                By subscribing, you agree to our{' '}
+                <Link to="/refund-policy" target="_blank" className="text-primary hover:underline font-bold">
+                  Refund & Cancellation Policy
+                </Link>.
+              </p>
             </div>
           </div>
 
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-5 sm:space-y-6 order-1 lg:order-2">
+          <div className="lg:col-span-7 space-y-5 sm:space-y-6 order-1 lg:order-2">
             {/* Delivery Address */}
             <div className="bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl">
               <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 flex items-center gap-2">
@@ -583,39 +663,40 @@ const SubscriptionCheckout: React.FC = () => {
               )}
             </div>
 
-            {/* Phone & Notes (for one-time orders) */}
-            {isOneTime && (
-              <div className="bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
-                  <Phone className="text-primary shrink-0" size={20} /> Contact & Notes
-                </h2>
-                <p className="text-xs sm:text-sm text-gray-500 mb-4">Helps our team coordinate your delivery smoothly.</p>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="e.g. +1 604-xxx-xxxx"
-                    className="w-full px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                    <MessageSquare size={12} /> Special Instructions (Optional)
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Leave at door, extra spicy, no onion..."
-                    rows={2}
-                    className="w-full px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition resize-none"
-                  />
-                </div>
+            {/* Contact Details & Delivery Notes */}
+            <div className="bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] border border-gray-100 shadow-xl space-y-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+                <Phone className="text-primary shrink-0" size={20} /> Contact Details & Notes
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-500 mb-4">Required so our delivery drivers can contact you when arriving with your meals.</p>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="e.g. +1 604-xxx-xxxx"
+                  className="w-full px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
+                />
               </div>
-            )}
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                  <MessageSquare size={12} /> Special Instructions (Optional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. Leave at door, buzz code #1234, extra spicy..."
+                  rows={2}
+                  className="w-full px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition resize-none"
+                />
+              </div>
+            </div>
 
             {/* Delivery Days Selection */}
             {!isOneTime && (
@@ -868,9 +949,29 @@ const SubscriptionCheckout: React.FC = () => {
                 </div>
               )}
 
+              {/* Mandatory Cancellation Policy & Terms Checkpoint */}
+              <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200/90 rounded-2xl shadow-sm">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox"
+                    required
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded text-primary focus:ring-primary border-gray-300 shrink-0 cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-700 leading-relaxed font-medium select-none">
+                    By clicking "{isOneTime ? (paymentMethod === 'Stripe' ? `Pay $${totalAmount.toFixed(2)} CAD` : 'Place Order') : (paymentMethod === 'Stripe' ? `Pay $${totalAmount.toFixed(2)} CAD` : 'Confirm Subscription')}", you agree to our{' '}
+                    <Link to="/refund-policy" target="_blank" className="text-primary hover:underline font-bold">
+                      Terms of Service
+                    </Link>{' '}
+                    and understand that all food orders are final. No refunds are given for cancellations or accidental orders once preparation begins.
+                  </span>
+                </label>
+              </div>
+
               <button 
                 type="submit"
-                disabled={loading || !address}
+                disabled={loading || !address || !termsAccepted}
                 className="w-full bg-primary text-white py-4 rounded-2xl font-bold hover:bg-primary-hover transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center shadow-lg shadow-primary/20 hover:-translate-y-0.5"
               >
                 {loading ? (

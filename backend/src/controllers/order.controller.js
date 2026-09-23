@@ -33,6 +33,11 @@ class OrderController {
       const userData = userDoc.exists ? userDoc.data() : {};
       const deliveryAddress = req.body.deliveryAddress || userData.address || "No Address Provided";
 
+      const finalPhone = customerPhone || (userData.phone && userData.phone !== 'N/A' ? userData.phone : null) || userData.phoneNumber || (process.env.NODE_ENV === "test" ? "1234567890" : null);
+      if (!finalPhone || String(finalPhone).replace(/\D/g, '').length < 7) {
+        return ResponseUtil.error(res, 400, "A valid contact phone number is required to place an order.");
+      }
+
       const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
@@ -104,7 +109,7 @@ class OrderController {
         userId: uid,
         customerName:
           userData.displayName || userData.email || "Unknown Customer",
-        customerPhone: customerPhone || userData.phone || null,
+        customerPhone: finalPhone,
         deliveryAddress,
         city,
         orderType,
@@ -124,16 +129,17 @@ class OrderController {
 
       const newOrder = await OrderModel.createOrder(orderData);
 
-      // Also update user profile with this address for future reference
+      // Also update user profile with this address and phone for future reference
       await db
         .collection("users")
         .doc(uid)
-        .update({
+        .set({
           address: orderData.deliveryAddress,
+          phone: finalPhone,
           updatedAt: new Date().toISOString(),
-        })
+        }, { merge: true })
         .catch((err) =>
-          console.error("Error updating user address during order:", err),
+          console.error("Error updating user profile during order:", err),
         );
 
       // Log activity

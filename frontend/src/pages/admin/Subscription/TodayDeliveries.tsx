@@ -18,7 +18,7 @@ import {
   Filter,
   X,
   Layers,
-  Utensils
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -41,6 +41,7 @@ interface Delivery {
   remainingDays?: number | null;
   paymentStatus?: string;
   subscriptionStatus?: string;
+  isCustomized?: boolean;
 }
 
 interface DeliveryResponse {
@@ -55,8 +56,7 @@ const TodayDeliveries: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [planFilter, setPlanFilter] = useState('All');
-  const [mealFilter, setMealFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [customizationFilter, setCustomizationFilter] = useState<'All' | 'Customized' | 'Default'>('All');
   const [copiedSubId, setCopiedSubId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<DeliveryResponse>({
@@ -141,23 +141,21 @@ const TodayDeliveries: React.FC = () => {
       const matchesPlan = planFilter === 'All' || 
         (del.plan || '').toLowerCase().includes(planFilter.toLowerCase());
 
-      const matchesMeal = mealFilter === 'All' || 
-        del.mealPreference?.toLowerCase() === mealFilter.toLowerCase();
+      const matchesCustomization = 
+        customizationFilter === 'All' ||
+        (customizationFilter === 'Customized' && !!del.isCustomized) ||
+        (customizationFilter === 'Default' && !del.isCustomized);
 
-      const matchesStatus = statusFilter === 'All' || 
-        del.deliveryStatus?.toLowerCase() === statusFilter.toLowerCase();
-
-      return matchesSearch && matchesPlan && matchesMeal && matchesStatus;
+      return matchesSearch && matchesPlan && matchesCustomization;
     });
-  }, [deliveries, searchTerm, planFilter, mealFilter, statusFilter]);
+  }, [deliveries, searchTerm, planFilter, customizationFilter]);
 
-  const hasActiveFilters = searchTerm !== '' || planFilter !== 'All' || mealFilter !== 'All' || statusFilter !== 'All';
+  const hasActiveFilters = searchTerm !== '' || planFilter !== 'All' || customizationFilter !== 'All';
 
   const clearAllFilters = () => {
     setSearchTerm('');
     setPlanFilter('All');
-    setMealFilter('All');
-    setStatusFilter('All');
+    setCustomizationFilter('All');
   };
 
   if (isLoading && deliveries.length === 0) return (
@@ -286,32 +284,16 @@ const TodayDeliveries: React.FC = () => {
               </select>
           </div>
 
-          {/* Meal Preference Filter */}
+          {/* Meal Customization Filter */}
           <div className="w-full md:w-auto">
               <select 
-                  value={mealFilter}
-                  onChange={(e) => setMealFilter(e.target.value)}
-                  className="w-full md:w-40 px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:ring-2 focus:ring-primary/20 text-sm font-bold text-gray-700 shadow-sm transition-all cursor-pointer"
+                  value={customizationFilter}
+                  onChange={(e) => setCustomizationFilter(e.target.value as 'All' | 'Customized' | 'Default')}
+                  className="w-full md:w-60 px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:ring-2 focus:ring-primary/20 text-sm font-bold text-gray-700 shadow-sm transition-all cursor-pointer"
               >
-                  <option value="All">All Diet Types</option>
-                  <option value="Veg">Pure Veg</option>
-                  <option value="Non-Veg">Non-Veg</option>
-              </select>
-          </div>
-
-          {/* Delivery Status Filter */}
-          <div className="w-full md:w-auto">
-              <select 
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full md:w-40 px-4 py-3 bg-white border border-gray-200 rounded-2xl focus:ring-2 focus:ring-primary/20 text-sm font-bold text-gray-700 shadow-sm transition-all cursor-pointer"
-              >
-                  <option value="All">All Statuses</option>
-                  <option value="Confirmed">Confirmed</option>
-                  <option value="Cooking">Cooking</option>
-                  <option value="Out for Delivery">Out for Delivery</option>
-                  <option value="Delivered">Delivered</option>
-                  <option value="Cancelled">Cancelled</option>
+                  <option value="All">All Meal Types (Default & Custom)</option>
+                  <option value="Customized">Customized Meals Only</option>
+                  <option value="Default">Default Menu Rotation Only</option>
               </select>
           </div>
         </div>
@@ -428,7 +410,16 @@ const TodayDeliveries: React.FC = () => {
                               }`}>
                                   {delivery.plan}
                               </span>
-                              {delivery.phone && (
+                              {delivery.isCustomized ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
+                                  Customized Meal
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500">
+                                  Default Menu
+                                </span>
+                              )}
+                              {delivery.phone && delivery.phone !== 'N/A' ? (
                                 <a 
                                   href={`tel:${delivery.phone}`}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-gray-50 text-gray-600 hover:bg-primary/10 hover:text-primary transition-all"
@@ -436,18 +427,32 @@ const TodayDeliveries: React.FC = () => {
                                   <Phone size={10} />
                                   <span>{delivery.phone}</span>
                                 </a>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <Phone size={10} />
+                                  <span>No Phone</span>
+                                </span>
                               )}
                           </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        <a 
-                          href={`tel:${delivery.phone}`}
-                          className="p-3 bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
-                          title="Call Customer"
-                        >
-                           <Phone size={20} />
-                        </a>
+                        {delivery.phone && delivery.phone !== 'N/A' ? (
+                          <a 
+                            href={`tel:${delivery.phone}`}
+                            className="p-3 bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
+                            title="Call Customer"
+                          >
+                             <Phone size={20} />
+                          </a>
+                        ) : (
+                          <span 
+                            className="p-3 bg-gray-50 text-gray-300 rounded-xl cursor-not-allowed opacity-50"
+                            title="No phone number on file"
+                          >
+                             <Phone size={20} />
+                          </span>
+                        )}
                     </div>
                   </div>
 
@@ -491,10 +496,15 @@ const TodayDeliveries: React.FC = () => {
                       <div className="pt-2">
                           <div className="flex items-center justify-between mb-2 px-1">
                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Tiffin Contents</p>
-                            <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
-                              <Utensils size={10} />
-                              {delivery.mealPreference}
-                            </span>
+                            {delivery.isCustomized ? (
+                              <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                                <Sparkles size={11} className="text-purple-600" /> Customized
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                                Default Menu
+                              </span>
+                            )}
                           </div>
                           {delivery.todayCustomization && Object.keys(delivery.todayCustomization).length > 0 ? (
                               <div className="grid grid-cols-2 gap-3">
