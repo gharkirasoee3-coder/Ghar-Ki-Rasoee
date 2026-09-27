@@ -41,6 +41,7 @@ const ResponseUtil = require("../src/utils/response.util");
 // Mock Models & Services
 jest.mock("../src/models/subscription.model", () => ({
   getUserSubscription: jest.fn(),
+  getActiveUserSubscriptions: jest.fn().mockResolvedValue([]),
   createSubscription: jest.fn(),
   collection: {
     doc: jest.fn(),
@@ -76,6 +77,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    MenuModel.clearCache();
     req = {
       user: { uid: "user-1", email: "test@example.com" },
       body: {},
@@ -166,13 +168,14 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
     });
   });
 
-  describe("COD One-Time Order Delivery Fee (OrderController)", () => {
-    it("should have free delivery (deliveryFee: 0) for one-time meal orders regardless of subtotal", async () => {
+  describe("COD One-Time Order Full Fees (OrderController)", () => {
+    it("should include configured delivery and platform fees below the free-delivery threshold", async () => {
       const OrderModel = require("../src/models/order.model");
       OrderModel.createOrder.mockResolvedValue({ orderId: "ord_123" });
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          customPricingConfig: { oneTimeBasePrice: 20, oneTimeBaseRoti: 8, oneTimeBaseSabzi: 2 },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
         }),
       });
@@ -181,17 +184,22 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
         orderType: "one-time",
         plan: "Single Meal",
         items: [{ price: 20, quantity: 1 }],
+        customDetails: { rotiCount: 8, sabziBoxes: 2 },
         deliveryAddress: "123 Main St",
         paymentMethod: "Cash on Delivery",
       };
 
       await OrderController.createOrder(req, res);
 
-      // Price should be 20 with 0 delivery fee
+      // $20 subtotal + $15 delivery + ($20 * 2.5% + $0.30) platform fee.
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 20,
-          deliveryFee: 0,
+          subtotal: 20,
+          discountedSubtotal: 20,
+          deliveryFee: 15,
+          platformServiceFee: 0.8,
+          totalAmount: 35.8,
+          price: 35.8,
         })
       );
       expect(ResponseUtil.send).toHaveBeenCalledWith(
@@ -202,12 +210,13 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       );
     });
 
-    it("should have free delivery (deliveryFee: 0) when subtotal is at or above threshold", async () => {
+    it("should have free delivery but still charge the platform fee at or above threshold", async () => {
       const OrderModel = require("../src/models/order.model");
       OrderModel.createOrder.mockResolvedValue({ orderId: "ord_123" });
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          customPricingConfig: { oneTimeBasePrice: 160, oneTimeBaseRoti: 8, oneTimeBaseSabzi: 2 },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
         }),
       });
@@ -216,24 +225,138 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
         orderType: "one-time",
         plan: "Massive Meal Order",
         items: [{ price: 160, quantity: 1 }],
+        customDetails: { rotiCount: 8, sabziBoxes: 2 },
         deliveryAddress: "123 Main St",
         paymentMethod: "Cash on Delivery",
       };
 
       await OrderController.createOrder(req, res);
 
-      // Price should be 160 with 0 delivery fee
+      // $160 subtotal + ($160 * 2.5% + $0.30) platform fee.
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 160,
+          price: 164.3,
+          subtotal: 160,
+          discountedSubtotal: 160,
           deliveryFee: 0,
+          platformServiceFee: 4.3,
+          totalAmount: 164.3,
         })
       );
+    });
+
+    it("calculates coupon, delivery, and platform fees server-side and ignores forged client totals", async () => {
+      const OrderModel = require("../src/models/order.model");
+      const CouponModel = require("../src/models/coupon.model");
+      OrderModel.createOrder.mockResolvedValue({ orderId: "ord_discounted" });
+      CouponModel.getCoupon.mockResolvedValue({
+        isActive: true,
+        discountType: "percentage",
+        discountValue: 10,
+        maxDiscountAmount: null,
+        minOrderAmount: 0,
+      });
+      CouponModel.incrementUsage.mockResolvedValue(true);
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          customPricingConfig: { oneTimeBasePrice: 100, oneTimeBaseRoti: 8, oneTimeBaseSabzi: 2 },
+          deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+        }),
+      });
+
+      req.body = {
+        orderType: "one-time",
+        items: [{ price: 100, quantity: 1 }],
+        customDetails: { rotiCount: 8, sabziBoxes: 2 },
+        deliveryAddress: "123 Main St",
+        paymentMethod: "Cash on Delivery",
+        couponCode: "SAVE10",
+        price: 0.01,
+        subtotal: 0.01,
+        discountAmount: 99,
+        deliveryFee: 0,
+        platformServiceFee: 0,
+        totalAmount: 0.01,
+      };
+
+      await OrderController.createOrder(req, res);
+
+      expect(OrderModel.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtotal: 100,
+          discountAmount: 10,
+          discountedSubtotal: 90,
+          deliveryFee: 15,
+          platformServiceFee: 2.55,
+          totalAmount: 107.55,
+          price: 107.55,
+        })
+      );
+    });
+
+    it("uses authoritative customization pricing instead of forged item prices", async () => {
+      const OrderModel = require("../src/models/order.model");
+      OrderModel.createOrder.mockResolvedValue({ orderId: "ord_trusted_price" });
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          customPricingConfig: {
+            oneTimeBasePrice: 13,
+            oneTimeBaseRoti: 8,
+            oneTimeBaseSabzi: 2,
+            oneTimePricePerRoti: 0.6,
+            oneTimePricePerSabzi: 3,
+            oneTimeRaitaPrice: 2,
+            oneTimeDessertPrice: 3,
+          },
+          deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+        }),
+      });
+
+      req.body = {
+        orderType: "one-time",
+        items: [{ id: "custom-meal", price: 0.01, quantity: 1 }],
+        customDetails: { rotiCount: 10, sabziBoxes: 3 },
+        price: 0.01,
+        deliveryAddress: "123 Main St",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await OrderController.createOrder(req, res);
+
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(OrderModel.createOrder).toHaveBeenCalledWith(expect.objectContaining({
+        subtotal: 17.2,
+        deliveryFee: 15,
+        platformServiceFee: 0.73,
+        totalAmount: 32.93,
+        price: 32.93,
+      }));
+    });
+
+    it("rejects one-time COD payloads that cannot be priced by the server", async () => {
+      const OrderModel = require("../src/models/order.model");
+      req.body = {
+        orderType: "one-time",
+        items: [{ id: "unknown", price: 0.01, quantity: 1 }],
+        deliveryAddress: "123 Main St",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await OrderController.createOrder(req, res);
+
+      expect(ResponseUtil.error).toHaveBeenCalledWith(
+        res,
+        400,
+        "One-time COD orders require meal customization details",
+      );
+      expect(OrderModel.createOrder).not.toHaveBeenCalled();
     });
   });
 
   describe("COD Subscription Delivery Fee (SubscriptionController)", () => {
-    it("should add delivery fee to finalPrice when subscription base price is below threshold", async () => {
+    it("should persist the complete server-calculated COD total when below threshold", async () => {
       const SubscriptionModel = require("../src/models/subscription.model");
       SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub_123" });
       mockGet.mockResolvedValue({
@@ -257,9 +380,63 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
         "user-1",
         expect.objectContaining({
           planDetails: expect.objectContaining({
-            price: 115, // 100 + 15
+            price: 117.8, // $100 + $15 delivery + $2.80 platform fee
           }),
+          subtotal: 100,
+          discountAmount: 0,
+          discountedSubtotal: 100,
           deliveryFee: 15,
+          platformServiceFee: 2.8,
+          totalAmount: 117.8,
+        })
+      );
+    });
+
+    it("applies coupon before the platform fee and ignores forged client fee totals", async () => {
+      const SubscriptionModel = require("../src/models/subscription.model");
+      const CouponModel = require("../src/models/coupon.model");
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub_discounted" });
+      CouponModel.getCoupon.mockResolvedValue({
+        isActive: true,
+        discountType: "percentage",
+        discountValue: 10,
+        maxDiscountAmount: null,
+        minOrderAmount: 0,
+      });
+      CouponModel.incrementUsage.mockResolvedValue(true);
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          plans: { basic: { price: 100 } },
+          deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+        }),
+      });
+
+      req.body = {
+        plan: "Basic",
+        planDetails: { price: 100 },
+        durationMonths: 1,
+        deliveryAddress: "123 Main St",
+        paymentMethod: "Cash on Delivery",
+        couponCode: "SAVE10",
+        discountAmount: 99,
+        deliveryFee: 0,
+        platformServiceFee: 0,
+        totalAmount: 0.01,
+      };
+
+      await SubscriptionController.createSubscription(req, res);
+
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({
+          planDetails: expect.objectContaining({ price: 107.55 }),
+          subtotal: 100,
+          discountAmount: 10,
+          discountedSubtotal: 90,
+          deliveryFee: 15,
+          platformServiceFee: 2.55,
+          totalAmount: 107.55,
         })
       );
     });
@@ -294,15 +471,91 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
 
       await SubscriptionController.createSubscription(req, res);
 
-      // Toronto is "far" per the mock, so $25 fee, total = 120 + 25 = 145
+      // Toronto is "far": $120 + $25 delivery + $3.30 platform fee.
       expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith(
         "user-1",
         expect.objectContaining({
           planDetails: expect.objectContaining({
-            price: 145,
+            price: 148.3,
           }),
           deliveryFee: 25,
+          platformServiceFee: 3.3,
+          totalAmount: 148.3,
         })
+      );
+    });
+
+    it("derives a subscription delivery zone from the address instead of a claimed cheaper city", async () => {
+      const SubscriptionModel = require("../src/models/subscription.model");
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub_address_city" });
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          plans: { basic: { price: 100 } },
+          cityCategories: {
+            local: {
+              cities: ["Vancouver"],
+              planPrices: { basic: 100 },
+              deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+            },
+            far: {
+              cities: ["Toronto"],
+              planPrices: { basic: 120 },
+              deliveryFeeSettings: { minAmountForFreeDelivery: 200, deliveryFee: 25 },
+            },
+          },
+        }),
+      });
+      req.body = {
+        plan: "Basic",
+        planDetails: { price: 120 },
+        deliveryAddress: "25 King Street, Toronto, ON",
+        city: "Vancouver",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await SubscriptionController.createSubscription(req, res);
+
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith(
+        "user-1",
+        expect.objectContaining({ city: "Toronto", deliveryFee: 25, totalAmount: 148.3 }),
+      );
+    });
+
+    it("derives a one-time COD delivery zone from the address instead of a claimed cheaper city", async () => {
+      const OrderModel = require("../src/models/order.model");
+      OrderModel.createOrder.mockResolvedValue({ orderId: "ord_address_city" });
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          customPricingConfig: { oneTimeBasePrice: 100, oneTimeBaseRoti: 8, oneTimeBaseSabzi: 2 },
+          cityCategories: {
+            local: {
+              cities: ["Vancouver"],
+              deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+            },
+            far: {
+              cities: ["Toronto"],
+              deliveryFeeSettings: { minAmountForFreeDelivery: 200, deliveryFee: 25 },
+            },
+          },
+        }),
+      });
+      req.body = {
+        orderType: "one-time",
+        items: [{ price: 0.01, quantity: 1 }],
+        customDetails: { rotiCount: 8, sabziBoxes: 2 },
+        deliveryAddress: "25 King Street, Toronto, ON",
+        city: "Vancouver",
+        paymentMethod: "Cash on Delivery",
+      };
+
+      await OrderController.createOrder(req, res);
+
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(OrderModel.createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ city: "Toronto", subtotal: 100, deliveryFee: 25, totalAmount: 127.8 }),
       );
     });
   });
@@ -314,6 +567,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          customPricingConfig: { oneTimeBasePrice: 150, oneTimeBaseRoti: 8, oneTimeBaseSabzi: 2 },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
         }),
       });
@@ -322,17 +576,20 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
         orderType: "one-time",
         plan: "Exactly At Threshold",
         items: [{ price: 150, quantity: 1 }],
+        customDetails: { rotiCount: 8, sabziBoxes: 2 },
         deliveryAddress: "123 Main St",
         paymentMethod: "Cash on Delivery",
       };
 
       await OrderController.createOrder(req, res);
 
-      // $150 is NOT < $150, so no delivery fee
+      // $150 is NOT < $150, so no delivery fee; platform fee still applies.
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 150,
+          price: 154.05,
           deliveryFee: 0,
+          platformServiceFee: 4.05,
+          totalAmount: 154.05,
         })
       );
     });
@@ -410,6 +667,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       req.body = {
         orderType: "one-time",
         items: [{ price: 20, quantity: 1 }],
+        customDetails: { rotiCount: 8, sabziBoxes: 2 },
         deliveryAddress: "123 Main St",
         couponCode: "REPEATING50",
         paymentMethod: "Cash on Delivery",

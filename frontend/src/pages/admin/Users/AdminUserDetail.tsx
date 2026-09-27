@@ -38,8 +38,8 @@ interface Subscription {
   subscriptionId: string;
   plan: string;
   status: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   paymentMethod: string;
   paymentStatus: string;
   skippedDates?: string[];
@@ -241,7 +241,7 @@ const AdminUserDetail: React.FC = () => {
                   baseStyle = 'bg-transparent border-transparent text-gray-300 opacity-50';
                 } else if (isBeforeStart || isAfterEnd) {
                    baseStyle = 'bg-gray-50/50 border-gray-100/50 text-gray-300';
-                } else if (subscription.status === 'Cancelled' && isAfter(day, parseISO(subscription.endDate))) {
+                } else if (subscription.status === 'Cancelled' && isAfter(day, endDate)) {
                    baseStyle = 'bg-red-50/50 border-red-100 text-red-300';
                 } else if (isSkipped) {
                   baseStyle = 'bg-amber-50 border-amber-200 text-amber-700';
@@ -430,11 +430,11 @@ const AdminUserDetail: React.FC = () => {
                     </div>
                     <div className="bg-gray-50 p-4 rounded-xl">
                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Start Date</p>
-                       <p className="font-bold text-gray-900 text-sm">{new Date(subscription.startDate).toLocaleDateString()}</p>
+                       <p className="font-bold text-gray-900 text-sm">{subscription.startDate ? new Date(subscription.startDate).toLocaleDateString() : 'Starts after acceptance'}</p>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-xl">
                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">End Date</p>
-                       <p className="font-bold text-primary text-sm">{new Date(subscription.endDate).toLocaleDateString()}</p>
+                       <p className="font-bold text-primary text-sm">{subscription.endDate ? new Date(subscription.endDate).toLocaleDateString() : 'Set after acceptance'}</p>
                     </div>
                   </div>
 

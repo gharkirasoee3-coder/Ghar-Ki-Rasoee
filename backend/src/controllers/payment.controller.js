@@ -7,6 +7,32 @@ const admin = require("../config/firebase.config");
 const db = admin.firestore();
 const cache = require("../utils/cache.util");
 const NotificationModel = require("../models/notification.model");
+const PriceUtil = require("../utils/price.util");
+
+function getReliableStripePriceBreakdown(session) {
+  const metadata = session.metadata || {};
+  if (metadata.pricingBreakdownReliable !== "true") return null;
+
+  const basePrice = PriceUtil.roundCurrency(metadata.basePrice);
+  const discountedSubtotal = PriceUtil.roundCurrency(metadata.discountedSubtotal);
+  const deliveryFee = PriceUtil.roundCurrency(metadata.deliveryFee);
+  const platformServiceFee = PriceUtil.roundCurrency(metadata.platformServiceFee);
+  const totalAmount = PriceUtil.roundCurrency(session.amount_total / 100);
+  const expectedTotal = PriceUtil.roundCurrency(
+    discountedSubtotal + deliveryFee + platformServiceFee,
+  );
+  if (PriceUtil.toCents(expectedTotal) !== PriceUtil.toCents(totalAmount)) return null;
+
+  return {
+    basePrice,
+    subtotal: basePrice,
+    discountAmount: PriceUtil.roundCurrency(basePrice - discountedSubtotal),
+    discountedSubtotal,
+    deliveryFee,
+    platformServiceFee,
+    totalAmount,
+  };
+}
 
 class PaymentController {
   /**
@@ -28,7 +54,8 @@ class PaymentController {
       const MenuModel = require("../models/menu.model");
       const menuConfig = (await MenuModel.getMenuConfig()) || {};
 
-      const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      // Prefer the address-derived city so a client cannot choose a cheaper fee region.
+      const city = MenuModel.getCityFromAddress(deliveryAddress, menuConfig) || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
 
@@ -159,6 +186,9 @@ class PaymentController {
         customDetails,
         replacePlan,
         deliveryFee,
+        basePrice: amount,
+        discountedSubtotal: stripeAmount,
+        pricingBreakdownReliable: !(isSubscriptionMode && couponCode),
         customerPhone: finalPhone,
         notes: notes || null,
       });
@@ -242,6 +272,7 @@ class PaymentController {
       }
 
       const parsedCustomDetails = customDetails ? JSON.parse(customDetails) : null;
+      const priceBreakdown = getReliableStripePriceBreakdown(session);
 
       const isCustomPlanType = planName.toLowerCase().includes('custom') || !!parsedCustomDetails?.isCustomPlan;
       const planData = {
@@ -263,6 +294,7 @@ class PaymentController {
         deliveryDays: parsedCustomDetails?.deliveryDays || null,
         customerPhone: customerPhone || null,
         notes: notes || null,
+        ...(priceBreakdown || {}),
       };
 
       const newSub = await SubscriptionModel.createSubscription(userId, planData);
@@ -390,6 +422,7 @@ class PaymentController {
         paymentStatus: "Paid",
         stripeSessionId: session.id,
         couponCode: couponCode || null,
+        ...(getReliableStripePriceBreakdown(session) || {}),
       };
 
       const newOrder = await OrderModel.createOrder(orderData);
@@ -423,6 +456,7 @@ class PaymentController {
         paymentMethod: "Stripe (Credit/Debit Card)",
         paymentType: "one-time",
         details: parsedItems,
+        feeBreakdown: newOrder,
         deliveryAddress,
         transactionId: newOrder.orderId
       }).catch(err => console.error("Failed to send order payment confirmation email:", err));

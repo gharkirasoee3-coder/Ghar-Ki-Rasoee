@@ -24,7 +24,10 @@ export interface Order {
   userId: string;
   items: OrderItem[];
   price: number;
-  status: 'Confirmed' | 'Cooking' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  status: 'Confirmed' | 'Cooking' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Pending' | 'Active' | 'Expired' | 'Renewed';
+  subscriptionId?: string;
+  isSubscriptionRecord?: boolean;
+  approvalStatus?: string;
   deliveryDate: string;
   deliveryAddress?: string;
   city?: string;
@@ -37,6 +40,11 @@ export interface Order {
   customerPhone?: string;
   customDetails?: OrderCustomDetails | null;
   notes?: string | null;
+  subtotal?: number;
+  discountAmount?: number;
+  discountedSubtotal?: number;
   deliveryFee?: number;
+  platformServiceFee?: number;
+  totalAmount?: number;
   couponCode?: string | null;
 }

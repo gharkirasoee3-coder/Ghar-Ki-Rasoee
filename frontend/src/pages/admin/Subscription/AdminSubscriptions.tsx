@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { ENV } from '../../../config/env.config';
 import { useAuth } from '../../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -23,16 +23,24 @@ interface Subscription {
   userPhone?: string;
   plan: string;
   status: string;
-  startDate: string;
-  endDate: string;
+  approvalStatus?: string;
+  startDate: string | null;
+  endDate: string | null;
   paymentMethod: string;
   paymentStatus: string;
   price?: number;
   planDetails?: { price: number };
   cancellationReason?: string;
   deliveryDays?: string[];
+  subtotal?: number;
+  discountAmount?: number;
+  discountedSubtotal?: number;
   deliveryFee?: number;
+  platformServiceFee?: number;
+  totalAmount?: number;
 }
+
+const isCOD = (paymentMethod: string) => ['cash on delivery', 'cod', 'cash'].includes(paymentMethod.toLowerCase());
 
 const AdminSubscriptions: React.FC = () => {
   const { user } = useAuth();
@@ -71,21 +79,48 @@ const AdminSubscriptions: React.FC = () => {
     }
   });
 
+  const acceptSubscriptionMutation = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      const token = await user?.getIdToken();
+      const response = await axios.patch(`${ENV.API_URL}/admin/subscriptions/${subscriptionId}/accept`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+      if (data?.billingCancellationPending) {
+        toast.warning('Subscription accepted, but previous Stripe billing could not be cancelled. Cancel the previous billing in Stripe manually to avoid further charges.', { duration: 12000 });
+        return;
+      }
+      toast.success('Subscription accepted. Deliveries can start; COD payment is still pending.');
+    },
+    onError: (err: AxiosError<{ message?: string }>) => {
+      toast.error(err.response?.data?.message || 'Failed to accept subscription');
+    }
+  });
+
   const confirmSubPaymentMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
       const token = await user?.getIdToken();
-      await axios.patch(
+      const response = await axios.patch(
         `${ENV.API_URL}/admin/subscriptions/${subscriptionId}/confirm-payment`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      return response.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+      if (data?.invoiceEmailSent === false) {
+        toast.warning('COD payment confirmed, but the invoice email could not be sent. Follow up with the customer and arrange to send their invoice.', { duration: 12000 });
+        return;
+      }
       toast.success("Subscription payment confirmed!");
     },
-    onError: (err: any) => {
+    onError: (err: AxiosError<{ message?: string }>) => {
       toast.error(err.response?.data?.message || "Failed to confirm payment");
     }
   });
@@ -125,6 +160,7 @@ const AdminSubscriptions: React.FC = () => {
   const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
       'Active': 'bg-green-100 text-green-800',
+      'Pending': 'bg-amber-100 text-amber-800',
       'Cancelled': 'bg-red-100 text-red-800',
       'Renewed': 'bg-blue-100 text-blue-800',
       'Expired': 'bg-gray-150 text-gray-800',
@@ -170,8 +206,8 @@ const AdminSubscriptions: React.FC = () => {
       {/* Professional Filters */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-4">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex bg-gray-100 p-1 rounded-lg">
-            {['All', 'Active', 'Cancelled', 'Renewed', 'Expired'].map((status) => (
+          <div className="flex flex-wrap bg-gray-100 p-1 rounded-lg">
+            {['All', 'Pending', 'Active', 'Cancelled', 'Renewed', 'Expired'].map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -268,42 +304,60 @@ const AdminSubscriptions: React.FC = () => {
                    )}
                 </div>
                 <div className="bg-gray-50 p-2 rounded-lg">
-                   <p className="text-xs text-gray-500">Price</p>
+                   <p className="text-xs text-gray-500">Total Due</p>
                    <p className="font-bold text-gray-900">${getPlanPrice(sub)}</p>
+                   {(sub.deliveryFee !== undefined || sub.platformServiceFee !== undefined) && (
+                     <p className="mt-1 text-[10px] text-gray-500">
+                       Delivery ${(sub.deliveryFee || 0).toFixed(2)} · Platform ${(sub.platformServiceFee || 0).toFixed(2)}
+                     </p>
+                   )}
                 </div>
              </div>
 
              <div className="space-y-1 text-xs text-gray-600 mb-3">
                 <div className="flex justify-between">
                    <span>Start:</span>
-                   <span className="font-medium">{new Date(sub.startDate).toLocaleDateString()}</span>
+                   <span className="font-medium">{sub.startDate ? new Date(sub.startDate).toLocaleDateString() : 'Starts after acceptance'}</span>
                 </div>
                 <div className="flex justify-between">
                    <span>End:</span>
-                   <span className="font-medium text-primary-dark">{new Date(sub.endDate).toLocaleDateString()}</span>
+                   <span className="font-medium text-primary-dark">{sub.endDate ? new Date(sub.endDate).toLocaleDateString() : 'Set after acceptance'}</span>
                 </div>
              </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <div className="flex flex-wrap gap-3 items-center justify-between pt-3 border-t border-gray-100">
                 <div className="flex items-center gap-2">
                    <span className={`text-[10px] px-2 py-1 rounded-md font-bold uppercase ${sub.paymentStatus === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                      {sub.paymentStatus}
                    </span>
                    <span className="text-xs text-gray-500">{sub.paymentMethod}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  {sub.paymentMethod === 'Cash on Delivery' && sub.paymentStatus !== 'Paid' && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {isCOD(sub.paymentMethod) && sub.status === 'Pending' && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Accept this subscription and start deliveries? COD payment will remain pending.')) {
+                          acceptSubscriptionMutation.mutate(sub.subscriptionId);
+                        }
+                      }}
+                      disabled={acceptSubscriptionMutation.isPending}
+                      className="px-3 py-2 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg disabled:opacity-50"
+                    >
+                      ACCEPT
+                    </button>
+                  )}
+                  {isCOD(sub.paymentMethod) && sub.paymentStatus !== 'Paid' && (
                     <button
                       onClick={() => {
                         if (window.confirm(`Confirm payment of $${getPlanPrice(sub)} collected for this subscription?`)) {
                           confirmSubPaymentMutation.mutate(sub.subscriptionId);
                         }
                       }}
-                      disabled={confirmSubPaymentMutation.isPending}
-                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                      disabled={sub.status === 'Pending' || sub.approvalStatus === 'Pending' || confirmSubPaymentMutation.isPending || acceptSubscriptionMutation.isPending}
+                      className="flex items-center gap-1 p-2 text-xs font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Collect COD Payment"
                     >
-                      <DollarSign size={16} />
+                      <DollarSign size={16} /> COD confirmed
                     </button>
                   )}
                   <button
@@ -397,7 +451,14 @@ const AdminSubscriptions: React.FC = () => {
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className="text-sm font-bold text-gray-900">${getPlanPrice(sub)}</span>
+                    <div>
+                      <span className="text-sm font-bold text-gray-900">${getPlanPrice(sub)}</span>
+                      {(sub.deliveryFee !== undefined || sub.platformServiceFee !== undefined) && (
+                        <p className="text-[10px] text-gray-500 mt-1">
+                          Delivery ${(sub.deliveryFee || 0).toFixed(2)} · Platform ${(sub.platformServiceFee || 0).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4">
                     <StatusBadge status={sub.status} />
@@ -406,11 +467,11 @@ const AdminSubscriptions: React.FC = () => {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2 text-xs text-gray-600">
                         <span className="w-10 opacity-60">From:</span>
-                        <span className="font-medium">{new Date(sub.startDate).toLocaleDateString()}</span>
+                        <span className="font-medium">{sub.startDate ? new Date(sub.startDate).toLocaleDateString() : 'Starts after acceptance'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-600">
                         <span className="w-10 opacity-60">To:</span>
-                        <span className="font-medium text-primary-dark">{new Date(sub.endDate).toLocaleDateString()}</span>
+                        <span className="font-medium text-primary-dark">{sub.endDate ? new Date(sub.endDate).toLocaleDateString() : 'Set after acceptance'}</span>
                       </div>
                     </div>
                   </td>
@@ -424,19 +485,32 @@ const AdminSubscriptions: React.FC = () => {
                   </td>
                   <td className="p-4">
                     <div className="flex justify-center gap-1 items-center">
-                      {sub.paymentMethod === 'Cash on Delivery' && sub.paymentStatus !== 'Paid' && (
+                      {isCOD(sub.paymentMethod) && sub.status === 'Pending' && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Accept this subscription and start deliveries? COD payment will remain pending.')) {
+                          acceptSubscriptionMutation.mutate(sub.subscriptionId);
+                        }
+                      }}
+                      disabled={acceptSubscriptionMutation.isPending}
+                      className="px-3 py-2 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg disabled:opacity-50"
+                    >
+                      ACCEPT
+                    </button>
+                  )}
+                  {isCOD(sub.paymentMethod) && sub.paymentStatus !== 'Paid' && (
                         <button
                           onClick={() => {
                             if (window.confirm(`Confirm payment of $${getPlanPrice(sub)} collected for this subscription?`)) {
                               confirmSubPaymentMutation.mutate(sub.subscriptionId);
                             }
                           }}
-                          disabled={confirmSubPaymentMutation.isPending}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-100 border border-emerald-200 transition-all"
+                          disabled={sub.status === 'Pending' || sub.approvalStatus === 'Pending' || confirmSubPaymentMutation.isPending || acceptSubscriptionMutation.isPending}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-100 border border-emerald-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Confirm COD Payment"
                         >
                           <DollarSign size={14} />
-                          Collect $
+                          COD confirmed
                         </button>
                       )}
                       <button

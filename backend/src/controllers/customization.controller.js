@@ -29,6 +29,13 @@ class CustomizationController {
       if (sub.userId !== userId) {
         return ResponseUtil.error(res, 403, "Unauthorized access to subscription customizations");
       }
+      if (sub.status && sub.status !== "Active") {
+        return ResponseUtil.error(
+          res,
+          409,
+          "Meal preferences can be changed after the subscription is accepted",
+        );
+      }
 
       // Enforce delivery days restriction: user can only customize meals for subscribed delivery days
       const deliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays;
@@ -187,6 +194,13 @@ class CustomizationController {
         const subDoc = await SubscriptionModel.collection.doc(cust.subscriptionId).get();
         if (subDoc.exists) {
           const sub = subDoc.data();
+          if (sub.status && sub.status !== "Active") {
+            return ResponseUtil.error(
+              res,
+              409,
+              "Meal preferences can be changed after the subscription is accepted",
+            );
+          }
           const deliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays;
           if (Array.isArray(deliveryDays) && deliveryDays.length > 0) {
             const allowedDays = deliveryDays.map((d) => d.toLowerCase());
@@ -247,6 +261,13 @@ class CustomizationController {
         const subDoc = await SubscriptionModel.collection.doc(cust.subscriptionId).get();
         if (subDoc.exists) {
           const sub = subDoc.data();
+          if (sub.status && sub.status !== "Active") {
+            return ResponseUtil.error(
+              res,
+              409,
+              "Meal preferences can be changed after the subscription is accepted",
+            );
+          }
           const deliveryDays = sub.deliveryDays || sub.planDetails?.deliveryDays || sub.customDetails?.deliveryDays;
           if (Array.isArray(deliveryDays) && deliveryDays.length > 0) {
             const allowedDays = deliveryDays.map((d) => d.toLowerCase());

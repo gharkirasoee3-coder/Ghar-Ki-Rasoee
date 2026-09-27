@@ -1,5 +1,6 @@
 const stripe = require("../config/stripe.config");
 const env = require("../config/env.config");
+const PriceUtil = require("../utils/price.util");
 
 class StripeService {
   /**
@@ -48,6 +49,9 @@ class StripeService {
     customDetails,
     replacePlan,
     deliveryFee = 0,
+    basePrice,
+    discountedSubtotal,
+    pricingBreakdownReliable = false,
     customerPhone,
     notes,
   }) {
@@ -92,7 +96,11 @@ class StripeService {
           replacePlan: replacePlan !== false ? "true" : "false",
           customerPhone: customerPhone || "",
           notes: notes || "",
-          serviceFee: ((Math.round(amountInCents * 0.025) + 30) / 100).toFixed(2),
+          basePrice: PriceUtil.roundCurrency(basePrice ?? amount).toFixed(2),
+          discountedSubtotal: PriceUtil.roundCurrency(discountedSubtotal ?? amount).toFixed(2),
+          deliveryFee: PriceUtil.roundCurrency(deliveryFee).toFixed(2),
+          platformServiceFee: PriceUtil.calculatePlatformServiceFee(amount).toFixed(2),
+          pricingBreakdownReliable: pricingBreakdownReliable ? "true" : "false",
         },
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -120,7 +128,9 @@ class StripeService {
       }
 
       // Automatically charge Platform Service Fee: 2.5% Service Fee + $0.30 Platform Fee
-      const serviceFeeInCents = Math.round(amountInCents * 0.025) + 30;
+      const serviceFeeInCents = PriceUtil.toCents(
+        PriceUtil.calculatePlatformServiceFee(amount),
+      );
       if (serviceFeeInCents > 0) {
         const serviceFeeItem = {
           price_data: {

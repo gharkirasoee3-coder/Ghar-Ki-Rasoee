@@ -38,12 +38,29 @@ class OrderController {
         return ResponseUtil.error(res, 400, "A valid contact phone number is required to place an order.");
       }
 
-      const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      // Prefer the address-derived city so a client cannot choose a cheaper fee region.
+      const city = MenuModel.getCityFromAddress(deliveryAddress, menuConfig) || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
       const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
 
-      const subtotal = PriceUtil.calculateTotal(orderType, plan, items);
+      const isOneTimeOrder = orderType.toLowerCase() === "one-time";
+      const isCOD = ["cash on delivery", "cod", "cash"].includes(
+        String(req.body.paymentMethod || "").toLowerCase(),
+      );
+      let subtotal;
+      if (isCOD && isOneTimeOrder) {
+        try {
+          subtotal = MenuModel.calculateOneTimePrice(customDetails, menuConfig);
+        } catch (error) {
+          return ResponseUtil.error(res, 400, error.message);
+        }
+      } else {
+        subtotal = PriceUtil.calculateTotal(orderType, plan, items);
+      }
+      const persistedItems = isCOD && isOneTimeOrder
+        ? [{ name: "One-Time Customized Meal", quantity: 1, price: subtotal }]
+        : (items || {});
       let price = subtotal;
       let discountAmount = 0;
 
@@ -59,7 +76,9 @@ class OrderController {
         if (!coupon.isActive) {
           return ResponseUtil.error(res, 400, "This coupon is inactive");
         }
-        const today = new Date().toISOString().split("T")[0];
+        const today = new Date().toLocaleDateString("en-CA", {
+          timeZone: "America/Toronto",
+        });
         if (coupon.expiresAt && coupon.expiresAt < today) {
           return ResponseUtil.error(res, 400, "This coupon has expired");
         }
@@ -92,12 +111,22 @@ class OrderController {
       }
 
       let deliveryFee = 0;
-      // One-time meals always enjoy free delivery
-      const isOneTimeOrder = orderType.toLowerCase() === "one-time";
-      if (!isOneTimeOrder && subtotal < deliverySettings.minAmountForFreeDelivery) {
-        deliveryFee = deliverySettings.deliveryFee;
+      let priceBreakdown = null;
+      if (isCOD && isOneTimeOrder) {
+        priceBreakdown = PriceUtil.calculateChargeBreakdown(
+          subtotal,
+          discountAmount,
+          deliverySettings,
+        );
+        price = priceBreakdown.totalAmount;
+        deliveryFee = priceBreakdown.deliveryFee;
+      } else {
+        // Preserve the established non-COD policy: one-time Stripe meals have free delivery.
+        if (!isOneTimeOrder && subtotal < deliverySettings.minAmountForFreeDelivery) {
+          deliveryFee = deliverySettings.deliveryFee;
+        }
+        price = PriceUtil.roundCurrency(price + deliveryFee);
       }
-      price += deliveryFee;
 
       // Handle Subscription Creation
       if (orderType === "Subscription" && plan) {
@@ -114,16 +143,24 @@ class OrderController {
         city,
         orderType,
         plan: plan || null,
-        items: items || {},
+        items: persistedItems,
         customDetails: customDetails || null,
         notes: notes || null,
         price,
-        deliveryFee,
+        ...(priceBreakdown || {
+          basePrice: PriceUtil.roundCurrency(subtotal),
+          subtotal: PriceUtil.roundCurrency(subtotal),
+          discountAmount: PriceUtil.roundCurrency(discountAmount),
+          discountedSubtotal: PriceUtil.roundCurrency(subtotal - discountAmount),
+          deliveryFee: PriceUtil.roundCurrency(deliveryFee),
+          platformServiceFee: 0,
+          totalAmount: price,
+        }),
         deliveryDate,
         deliveryTime: deliveryTime || "8:00 AM",
         paymentMethod: req.body.paymentMethod || "Online",
         paymentStatus:
-          req.body.paymentMethod === "Cash on Delivery" ? "Pending" : "Paid",
+          isCOD ? "Pending" : "Paid",
         couponCode: couponCode || null,
       };
 
@@ -204,6 +241,9 @@ class OrderController {
       }
 
       const updated = await OrderModel.updateStatus(orderId, status);
+      if (updated.subscriptionId) {
+        require("./admin.controller").invalidateSubscriptionCaches(updated.userId);
+      }
       
       // Clear cache
       const cache = require("../utils/cache.util");

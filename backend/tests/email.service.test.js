@@ -145,6 +145,38 @@ describe("EmailService", () => {
       );
     });
 
+    it("should include the persisted COD delivery and platform fees in the invoice", async () => {
+      config.SMTP.USER = "test@example.com";
+      config.SMTP.PASS = "testpassword";
+
+      const result = await EmailService.sendPaymentConfirmationEmail({
+        userEmail: "customer@example.com",
+        userName: "Himanshu",
+        amount: 107.55,
+        paymentMethod: "Cash on Delivery",
+        paymentType: "one-time",
+        details: orderItems,
+        feeBreakdown: {
+          subtotal: 100,
+          discountAmount: 10,
+          discountedSubtotal: 90,
+          deliveryFee: 15,
+          platformServiceFee: 2.55,
+          totalAmount: 107.55,
+        },
+        deliveryAddress: "68 Albion Avenue",
+        transactionId: "ord-cod-fees",
+      });
+
+      expect(result).toBe(true);
+      const transport = nodemailer.createTransport.mock.results[0].value;
+      expect(transport.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          html: expect.stringMatching(/\$107\.55[\s\S]*Delivery Fee[\s\S]*\$15\.00 CAD[\s\S]*Platform Service Fee[\s\S]*\$2\.55 CAD/),
+        }),
+      );
+    });
+
     it("should render default values for custom plan options", async () => {
       config.SMTP.USER = "test@example.com";
       config.SMTP.PASS = "testpassword";

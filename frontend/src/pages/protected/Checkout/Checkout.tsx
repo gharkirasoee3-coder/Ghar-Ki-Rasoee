@@ -8,10 +8,12 @@ import PageContainer from '../../../components/layout/PageContainer';
 import { MapPin, CreditCard, Map as MapIcon, Truck, Info, Phone } from 'lucide-react';
 import LocationPicker from '../../../components/common/LocationPicker';
 import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
+import { useCity } from '../../../context/CityContext';
 
 const Checkout: React.FC = () => {
   const { items, cartTotal, clearCart } = useCart();
   const { user } = useAuth();
+  const { selectedCity } = useCity();
   const navigate = useNavigate();
   
   const deliverySchedule = getNextDeliverySchedule();
@@ -26,9 +28,17 @@ const Checkout: React.FC = () => {
   const [saveAddress, setSaveAddress] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<string[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [deliverySettings, setDeliverySettings] = useState({
+    minAmountForFreeDelivery: 150,
+    deliveryFee: 15,
+  });
 
-  const serviceFee = paymentMethod === 'Online' ? Math.round((cartTotal * 0.025 + 0.30) * 100) / 100 : 0;
-  const finalTotal = Math.round((cartTotal + serviceFee) * 100) / 100;
+  const isCOD = paymentMethod === 'Cash on Delivery';
+  const deliveryFee = isCOD && cartTotal < deliverySettings.minAmountForFreeDelivery
+    ? deliverySettings.deliveryFee
+    : 0;
+  const serviceFee = Math.round((cartTotal * 0.025 + 0.30) * 100) / 100;
+  const finalTotal = Math.round((cartTotal + deliveryFee + serviceFee) * 100) / 100;
 
   // Move validation logic after hooks to avoid conditional hook execution
   const isCartEmpty = items.length === 0;
@@ -62,6 +72,22 @@ const Checkout: React.FC = () => {
     };
     fetchProfile();
   }, [user]);
+
+  useEffect(() => {
+    const fetchDeliverySettings = async () => {
+      try {
+        const response = await axios.get(`${ENV.API_URL}/menu/plans`, {
+          params: { city: selectedCity },
+        });
+        if (response.data?.data?.deliveryFeeSettings) {
+          setDeliverySettings(response.data.data.deliveryFeeSettings);
+        }
+      } catch (fetchError) {
+        console.error('Failed to fetch delivery fee settings:', fetchError);
+      }
+    };
+    fetchDeliverySettings();
+  }, [selectedCity]);
 
   if (isCartEmpty) {
     return (
@@ -153,6 +179,7 @@ const Checkout: React.FC = () => {
           price: cartTotal,
           deliveryDate: date,
           deliveryAddress: address,
+          city: selectedCity,
           customerPhone,
           notes,
           paymentMethod: 'Cash on Delivery',
@@ -418,20 +445,29 @@ const Checkout: React.FC = () => {
                     <span className="font-semibold text-gray-900 whitespace-nowrap">${cartTotal.toFixed(2)} CAD</span>
                   </div>
 
-                  {paymentMethod === 'Online' && (
+                  {isCOD && (
                     <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
-                      <span className="flex items-center gap-1 font-medium">
-                        <span>Platform Service Fee</span>
-                        <span className="text-[10px] text-gray-400 font-normal">(2.5% + $0.30)</span>
-                      </span>
-                      <span className="font-semibold text-gray-900 whitespace-nowrap">+${serviceFee.toFixed(2)} CAD</span>
+                      <span className="font-medium">Delivery Fee</span>
+                      {deliveryFee > 0 ? (
+                        <span className="font-semibold text-orange-600 whitespace-nowrap">+${deliveryFee.toFixed(2)} CAD</span>
+                      ) : (
+                        <span className="font-bold text-green-600">FREE</span>
+                      )}
                     </div>
                   )}
+
+                  <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
+                    <span className="flex items-center gap-1 font-medium">
+                      <span>Platform Service Fee</span>
+                      <span className="text-[10px] text-gray-400 font-normal">(2.5% + $0.30)</span>
+                    </span>
+                    <span className="font-semibold text-gray-900 whitespace-nowrap">+${serviceFee.toFixed(2)} CAD</span>
+                  </div>
 
                   <div className="flex justify-between items-center border-t border-gray-200 pt-4 mt-4">
                     <div>
                       <span className="text-base sm:text-lg font-black text-gray-900 block">Total Due</span>
-                      <span className="text-[11px] sm:text-xs text-gray-400 font-medium">All fees & taxes included</span>
+                      <span className="text-[11px] sm:text-xs text-gray-400 font-medium">Delivery and platform fees included</span>
                     </div>
                     <div className="text-right">
                       <div className="inline-flex items-baseline justify-end gap-1.5 whitespace-nowrap">
@@ -447,7 +483,7 @@ const Checkout: React.FC = () => {
                <div className="mt-5 bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
                  <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
                  <p className="leading-relaxed">
-                   <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                   <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to every payment method, including Cash on Delivery.
                  </p>
                </div>
 

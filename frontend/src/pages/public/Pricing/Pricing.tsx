@@ -176,7 +176,7 @@ const Pricing: React.FC = () => {
           : 'No Sabzi Box (0 Boxes)',
         extraRaita ? 'Extra Raita or Salad included' : (weeklyMenu[selectedDay]?.raita ? 'Standard Raita or Salad included' : 'Fresh Salad & Pickle included'),
         extraSweet ? 'Extra Dessert Sweet included' : 'No dessert sweet',
-        'Free delivery',
+        'Delivery fee calculated at checkout',
       ],
       customDetails: {
         day: selectedDay,
@@ -200,7 +200,7 @@ const Pricing: React.FC = () => {
          <PageContainer>
            <h1 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Transparent Pricing</h1>
            <p className="text-slate-600 max-w-2xl mx-auto text-lg font-medium">
-             No hidden charges. No delivery fees. Just pure, wholesome food at a predictable cost.
+             Transparent totals with delivery and platform fees shown before you place the order.
            </p>
          </PageContainer>
        </div>
@@ -603,7 +603,7 @@ const Pricing: React.FC = () => {
                 <div className="mx-6 sm:mx-8 my-4 bg-amber-50/80 border border-amber-200/80 p-3 rounded-xl text-xs text-amber-900 flex items-start gap-2">
                   <Info size={15} className="text-amber-600 shrink-0 mt-0.5" />
                   <p className="leading-snug">
-                    <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                    <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to every payment method, including Cash on Delivery.
                   </p>
                 </div>
               </div>

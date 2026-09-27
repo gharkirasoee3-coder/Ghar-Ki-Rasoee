@@ -21,6 +21,8 @@ router.delete(
   AdminController.deleteSubscription,
 );
 
+router.patch("/subscriptions/:subscriptionId/accept", AdminController.acceptSubscription);
+
 // COD Payment Verification
 router.patch(
   "/orders/:orderId/confirm-payment",

@@ -8,6 +8,7 @@ class SubscriptionModel {
   static async createSubscription(uid, planData) {
     const subscriptionId = uuidv4();
     const startDate = new Date();
+    const isCOD = ["cash on delivery", "cod", "cash"].includes(String(planData.paymentMethod || "").toLowerCase());
     const duration = planData.duration || 30; // Default 30 days
     const endDate = new Date();
     endDate.setDate(startDate.getDate() + duration);
@@ -22,15 +23,30 @@ class SubscriptionModel {
     ];
 
     const deliveryDaysCount = Math.round((duration / 7) * deliveryDays.length);
+    const priceBreakdownFields = [
+      "basePrice",
+      "subtotal",
+      "discountAmount",
+      "discountedSubtotal",
+      "deliveryFee",
+      "platformServiceFee",
+      "totalAmount",
+    ];
+    const hasPriceBreakdown = priceBreakdownFields.every(
+      (field) => planData[field] !== undefined,
+    );
 
     const newSubscription = {
       subscriptionId,
       userId: uid,
       plan: planData.plan || "Custom Plan",
       planDetails: planData.planDetails || {},
-      status: "Active",
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
+      status: isCOD ? "Pending" : "Active",
+      ...(isCOD ? { approvalStatus: "Pending" } : {}),
+      durationDays: duration,
+      replacesSubscriptionId: planData.replacesSubscriptionId || null,
+      startDate: isCOD ? null : startDate.toISOString(),
+      endDate: isCOD ? null : endDate.toISOString(),
       remainingDays: deliveryDaysCount,
       deliveryDays,
       skippedDates: [],
@@ -41,7 +57,16 @@ class SubscriptionModel {
       customerPhone: planData.customerPhone || planData.phone || null,
       notes: planData.notes || null,
       paymentMethod: planData.paymentMethod || "Online",
-      paymentStatus: planData.paymentStatus || "Paid",
+      paymentStatus: isCOD ? "Pending" : (planData.paymentStatus || "Paid"),
+      ...(hasPriceBreakdown ? {
+        basePrice: planData.basePrice,
+        subtotal: planData.subtotal,
+        discountAmount: planData.discountAmount,
+        discountedSubtotal: planData.discountedSubtotal,
+        deliveryFee: planData.deliveryFee,
+        platformServiceFee: planData.platformServiceFee,
+        totalAmount: planData.totalAmount,
+      } : {}),
       stripeSessionId: planData.stripeSessionId || null,
       stripeSubscriptionId: planData.stripeSubscriptionId || null,
       couponCode: planData.couponCode || null,
@@ -54,10 +79,10 @@ class SubscriptionModel {
     return newSubscription;
   }
 
-  static async getActiveUserSubscriptions(uid) {
+  static async getActiveUserSubscriptions(uid, includePending = false) {
     const snapshot = await this.collection
       .where("userId", "==", uid)
-      .where("status", "==", "Active")
+      .where("status", "in", includePending ? ["Active", "Pending"] : ["Active"])
       .get();
 
     if (snapshot.empty) return [];
@@ -67,7 +92,7 @@ class SubscriptionModel {
     let updated = false;
 
     for (const sub of subscriptions) {
-      if (sub.endDate) {
+      if (sub.status === "Active" && sub.endDate) {
         const endDate = new Date(sub.endDate);
         if (endDate < now) {
           sub.status = "Expired";
@@ -82,7 +107,7 @@ class SubscriptionModel {
     }
 
     const activeSubscriptions = updated 
-      ? subscriptions.filter(sub => sub.status === "Active")
+      ? subscriptions.filter(sub => sub.status === "Active" || (includePending && sub.status === "Pending"))
       : subscriptions;
 
     activeSubscriptions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

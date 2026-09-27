@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -39,16 +40,22 @@ const AdminOrders: React.FC = () => {
   const confirmCODPaymentMutation = useMutation({
     mutationFn: async (orderId: string) => {
       const token = await user?.getIdToken();
-      await axios.patch(
+      const response = await axios.patch(
         `${ENV.API_URL}/admin/orders/${orderId}/confirm-payment`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      return response.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
       queryClient.invalidateQueries({ queryKey: ['adminDeliveries'] });
       queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+      queryClient.invalidateQueries({ queryKey: ['adminSubscriptions'] });
+      if (data?.invoiceEmailSent === false) {
+        toast.warning('COD payment confirmed, but the invoice email could not be sent. Follow up with the customer and arrange to send their invoice.', { duration: 12000 });
+        return;
+      }
       toast.success("Payment confirmed as collected!");
     },
     onError: (err: any) => {
@@ -425,6 +432,7 @@ const AdminOrders: React.FC = () => {
           const isExpanded = expandedOrderId === order.orderId;
           const isPendingCOD = isCODPending(order);
           const isOneTime = isOneTimeOrder(order);
+          const needsAcceptance = order.isSubscriptionRecord === true && (order.status === 'Pending' || order.approvalStatus === 'Pending');
           const cd = order.customDetails;
           const hasCustomDetails = cd && (cd.sabziSet1 || cd.sabziSet2 || cd.rotiCount);
           const orderDateFormatted = order.createdAt 
@@ -832,6 +840,13 @@ const AdminOrders: React.FC = () => {
                           </div>
                         )}
 
+                        {order.platformServiceFee !== undefined && order.platformServiceFee > 0 && (
+                          <div className="flex justify-between text-gray-600">
+                            <span>Platform Service Fee</span>
+                            <span className="font-semibold text-gray-900">+${order.platformServiceFee.toFixed(2)}</span>
+                          </div>
+                        )}
+
                         {order.couponCode && (
                           <div className="flex justify-between text-gray-600">
                             <span>Coupon Applied</span>
@@ -887,7 +902,7 @@ const AdminOrders: React.FC = () => {
                               Payment Not Collected (${typeof order.price === 'number' ? order.price.toFixed(2) : order.price} CAD)
                             </span>
                             <span className="text-[10px] text-amber-700 font-medium">
-                              Collect cash when delivering meal to customer
+                              {needsAcceptance ? 'Pending for admin verification' : 'Confirm payment when cash is received'}
                             </span>
                           </div>
                         </div>
@@ -896,7 +911,12 @@ const AdminOrders: React.FC = () => {
 
                     {/* Admin Action Buttons */}
                     <div className="flex items-center gap-2.5 justify-end">
-                      {order.paymentStatus !== 'Paid' && (
+                      {needsAcceptance && (
+                        <Link to="/admin/subscriptions" className="px-4 py-2 text-sm font-bold text-blue-700 bg-blue-50 rounded-lg">
+                          ACCEPT in Subscriptions
+                        </Link>
+                      )}
+                      {isCODPending(order) && !needsAcceptance && (
                         <button
                           onClick={() => showConfirm(
                             'Confirm Cash Payment Collected',

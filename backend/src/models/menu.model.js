@@ -478,6 +478,66 @@ class MenuModel {
     const finalPrice = basePlanPrice * (deliveryDaysCount / 6);
     return Math.round(finalPrice * 100) / 100;
   }
+
+  /**
+   * Calculate a one-time customized meal from server-managed pricing rules.
+   * Client item names/prices are presentation data and are never used here.
+   */
+  static calculateOneTimePrice(customDetails, config) {
+    if (!customDetails || typeof customDetails !== "object") {
+      throw new Error("One-time COD orders require meal customization details");
+    }
+
+    const rules = {
+      oneTimeBasePrice: 13,
+      oneTimeBaseRoti: 8,
+      oneTimeBaseSabzi: 2,
+      oneTimePricePerRoti: 0.6,
+      oneTimePricePerSabzi: 3,
+      oneTimeRaitaPrice: 2,
+      oneTimeDessertPrice: 3,
+      ...(config.customPricingConfig || {}),
+    };
+    const rotiCount = Number(customDetails.rotiCount);
+    const sabziBoxes = Number(customDetails.sabziBoxes);
+    if (!Number.isInteger(rotiCount) || rotiCount < 0 || rotiCount > 50) {
+      throw new Error("Roti count must be a whole number between 0 and 50");
+    }
+    if (!Number.isInteger(sabziBoxes) || sabziBoxes < 0 || sabziBoxes > 50) {
+      throw new Error("Sabzi box count must be a whole number between 0 and 50");
+    }
+    for (const field of ["extraRaita", "extraSweet"]) {
+      if (customDetails[field] !== undefined && typeof customDetails[field] !== "boolean") {
+        throw new Error(`${field} must be true or false`);
+      }
+    }
+
+    if (customDetails.sabziBreakdown !== undefined) {
+      if (!customDetails.sabziBreakdown || typeof customDetails.sabziBreakdown !== "object" || Array.isArray(customDetails.sabziBreakdown)) {
+        throw new Error("Sabzi breakdown must be an object");
+      }
+      const breakdownTotal = Object.values(customDetails.sabziBreakdown).reduce((sum, rawCount) => {
+        const count = Number(rawCount);
+        if (!Number.isInteger(count) || count < 0 || count > 50) {
+          throw new Error("Each sabzi quantity must be a whole number between 0 and 50");
+        }
+        return sum + count;
+      }, 0);
+      if (breakdownTotal !== sabziBoxes) {
+        throw new Error("Sabzi box count does not match the selected sabzi quantities");
+      }
+    }
+
+    const calculated = Number(rules.oneTimeBasePrice)
+      + (rotiCount - Number(rules.oneTimeBaseRoti)) * Number(rules.oneTimePricePerRoti)
+      + (sabziBoxes - Number(rules.oneTimeBaseSabzi)) * Number(rules.oneTimePricePerSabzi)
+      + (customDetails.extraRaita ? Number(rules.oneTimeRaitaPrice) : 0)
+      + (customDetails.extraSweet ? Number(rules.oneTimeDessertPrice) : 0);
+    if (!Number.isFinite(calculated)) {
+      throw new Error("One-time meal pricing configuration is invalid");
+    }
+    return Math.max(5, Math.round(calculated * 100) / 100);
+  }
 }
 
 module.exports = MenuModel;

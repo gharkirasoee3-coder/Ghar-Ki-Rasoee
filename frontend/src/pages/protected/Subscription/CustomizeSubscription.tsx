@@ -124,6 +124,10 @@ const CustomizeSubscription: React.FC = () => {
             return;
           }
         }
+        if (sub.status !== 'Active') {
+          navigate('/my-subscription', { replace: true });
+          return;
+        }
         setSubscription(sub);
 
         // Parse subscribed delivery days

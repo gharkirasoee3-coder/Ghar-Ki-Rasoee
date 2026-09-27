@@ -25,7 +25,13 @@ class OrderModel {
       .where("userId", "==", userId)
       .orderBy("createdAt", "desc")
       .get();
-    return snapshot.docs.map((doc) => doc.data());
+    const orders = snapshot.docs.map((doc) => doc.data());
+    const ids = [...new Set(orders.map(order => order.subscriptionId).filter(Boolean))];
+    const subscriptions = await Promise.all(ids.map(id => db.collection("subscriptions").doc(id).get()));
+    const paymentStatuses = new Map(subscriptions.filter(doc => doc.exists).map(doc => [doc.id, doc.data().paymentStatus]));
+    return orders.map(order => paymentStatuses.has(order.subscriptionId)
+      ? { ...order, paymentStatus: paymentStatuses.get(order.subscriptionId) || "Paid" }
+      : order);
   }
 
   static async getAllOrders() {
@@ -59,11 +65,16 @@ class OrderModel {
       if (doc.exists) userMap[doc.id] = doc.data();
     });
 
+    const subscriptionMap = new Map(rawSubscriptions.map(sub => [sub.subscriptionId, sub]));
+
     // Map rawOrders
     const mappedOrders = rawOrders.map((order) => {
       const user = userMap[order.userId] || {};
       return {
         ...order,
+        ...(order.subscriptionId && subscriptionMap.has(order.subscriptionId) ? {
+          paymentStatus: subscriptionMap.get(order.subscriptionId).paymentStatus || "Paid",
+        } : {}),
         customerName:
           order.customerName ||
           user.name ||
@@ -87,11 +98,15 @@ class OrderModel {
       const planPrice = sub.planDetails?.price || sub.price || 0;
       
       let status = "Confirmed";
-      if (sub.status === "Cancelled") status = "Cancelled";
+      if (sub.status === "Pending") status = "Pending";
+      else if (sub.status === "Cancelled") status = "Cancelled";
       else if (sub.status === "Expired") status = "Cancelled";
 
       return {
         orderId: sub.subscriptionId,
+        subscriptionId: sub.subscriptionId,
+        isSubscriptionRecord: true,
+        approvalStatus: sub.approvalStatus || null,
         userId: sub.userId,
         customerName:
           user.name ||
@@ -150,15 +165,15 @@ class OrderModel {
       const subRef = db.collection("subscriptions").doc(orderId);
       const subDoc = await subRef.get();
       if (subDoc.exists) {
-        let subStatus = "Active";
-        if (status === "Cancelled") {
-          subStatus = "Cancelled";
+        if (status !== "Cancelled") {
+          throw new Error("Use subscription approval to activate a plan; delivery status applies only to orders");
         }
+        const subStatus = "Cancelled";
         await subRef.update({
           status: subStatus,
           updatedAt: new Date().toISOString(),
         });
-        return { orderId, status };
+        return { orderId, status, subscriptionId: orderId, userId: subDoc.data().userId };
       }
     }
     throw new Error("Document not found");

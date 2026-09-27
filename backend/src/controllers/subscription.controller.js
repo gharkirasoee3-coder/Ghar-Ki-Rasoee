@@ -1,10 +1,10 @@
 const SubscriptionModel = require("../models/subscription.model");
 const ResponseUtil = require("../utils/response.util");
 const cache = require("../utils/cache.util");
+const PriceUtil = require("../utils/price.util");
 
 class SubscriptionController {
-  // This meant to be called after payment success or to initiate Standard plan?
-  // For now, let's assume it creates a pending subscription record to be activated by payment.
+  // Public checkout requests COD approval. Verified online checkout uses PaymentController.
   static async createSubscription(req, res) {
     try {
       const { uid } = req.user;
@@ -14,7 +14,6 @@ class SubscriptionController {
         durationMonths,
         deliveryAddress,
         paymentMethod,
-        paymentStatus,
         couponCode,
         customDetails,
         replacePlan,
@@ -23,6 +22,14 @@ class SubscriptionController {
       } = req.body;
 
       if (!plan) return ResponseUtil.error(res, 400, "Plan is required");
+
+      if (paymentMethod && !["cash on delivery", "cod", "cash"].includes(String(paymentMethod).toLowerCase())) {
+        return ResponseUtil.error(res, 400, "Online subscriptions must be created through verified checkout");
+      }
+      const months = Number(durationMonths || 1);
+      if (!Number.isInteger(months) || months < 1 || months > 12) {
+        return ResponseUtil.error(res, 400, "Subscription duration must be between 1 and 12 months");
+      }
 
       const planName = typeof plan === "object" ? (plan.name || "") : plan;
       let basePrice = planDetails?.price || planDetails || 0;
@@ -41,7 +48,8 @@ class SubscriptionController {
         return ResponseUtil.error(res, 400, "A valid contact phone number is required to place a subscription.");
       }
 
-      const city = req.body.city || MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      // Prefer the address-derived city so a client cannot choose a cheaper fee region.
+      const city = MenuModel.getCityFromAddress(deliveryAddress, menuConfig) || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
 
@@ -75,7 +83,6 @@ class SubscriptionController {
         }
       }
 
-      let finalPrice = basePrice;
       let discountAmount = 0;
 
       if (couponCode) {
@@ -87,14 +94,16 @@ class SubscriptionController {
         if (!coupon.isActive) {
           return ResponseUtil.error(res, 400, "This coupon is inactive");
         }
-        const today = new Date().toISOString().split("T")[0];
+        const today = new Date().toLocaleDateString("en-CA", {
+          timeZone: "America/Toronto",
+        });
         if (coupon.expiresAt && coupon.expiresAt < today) {
           return ResponseUtil.error(res, 400, "This coupon has expired");
         }
         if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
           return ResponseUtil.error(res, 400, "This coupon has reached its usage limit");
         }
-        if (coupon.minOrderAmount > 0 && finalPrice < coupon.minOrderAmount) {
+        if (coupon.minOrderAmount > 0 && basePrice < coupon.minOrderAmount) {
           return ResponseUtil.error(
             res,
             400,
@@ -105,13 +114,12 @@ class SubscriptionController {
         if (coupon.discountType === "fixed") {
           discountAmount = coupon.discountValue;
         } else if (coupon.discountType === "percentage") {
-          discountAmount = finalPrice * (coupon.discountValue / 100);
+          discountAmount = basePrice * (coupon.discountValue / 100);
           if (coupon.maxDiscountAmount !== null && discountAmount > coupon.maxDiscountAmount) {
             discountAmount = coupon.maxDiscountAmount;
           }
         }
-        discountAmount = Math.min(discountAmount, finalPrice);
-        finalPrice = Math.max(0, finalPrice - discountAmount);
+        discountAmount = Math.min(discountAmount, basePrice);
 
         // Increment coupon usage count immediately for COD
         await CouponModel.incrementUsage(couponCode).catch((err) =>
@@ -120,51 +128,37 @@ class SubscriptionController {
       }
 
       const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
-      let deliveryFee = 0;
-      if (basePrice < deliverySettings.minAmountForFreeDelivery) {
-        deliveryFee = deliverySettings.deliveryFee;
-      }
-      finalPrice += deliveryFee;
+      const priceBreakdown = PriceUtil.calculateChargeBreakdown(
+        basePrice,
+        discountAmount,
+        deliverySettings,
+      );
 
       let existing = null;
 
-      // Check if user already has active subscription (only if replacePlan !== false)
+      // Keep the current plan running until an administrator accepts its replacement.
       if (replacePlan !== false && replacePlan !== "false") {
-        existing = await SubscriptionModel.getUserSubscription(uid);
-
-        if (existing) {
-          // Mark the old subscription as Renewed/Replaced
-          await SubscriptionModel.collection.doc(existing.subscriptionId).update({
-            status: "Renewed",
-            updatedAt: new Date().toISOString()
-          });
-
-          // Cancel the recurring billing on Stripe for the old subscription to avoid double-charging
-          if (existing.stripeSubscriptionId) {
-            const StripeService = require("../services/stripe.service");
-            await StripeService.cancelSubscription(existing.stripeSubscriptionId).catch((err) =>
-              console.error("Failed to cancel old Stripe subscription billing:", err)
-            );
-          }
-        }
+        const activeSubscriptions = await SubscriptionModel.getActiveUserSubscriptions(uid);
+        existing = activeSubscriptions?.[0] || null;
       }
 
       const isCustomPlanType = planName.toLowerCase().includes('custom') || !!customDetails?.isCustomPlan;
       const planData = {
         plan: planName,
         planDetails: {
+          ...(customDetails ? { ...(isCustomPlanType ? { custom: true } : {}), ...customDetails } : {}),
           name: planName,
-          price: finalPrice,
-          ...(customDetails ? { ...(isCustomPlanType ? { custom: true } : {}), ...customDetails } : {})
+          price: priceBreakdown.totalAmount,
         },
-        duration: (durationMonths || 1) * 30, // Convert months to days approx
+        duration: months * 30, // Convert months to days approx
         deliveryAddress,
         city,
-        paymentMethod,
-        paymentStatus,
+        paymentMethod: "Cash on Delivery",
+        paymentStatus: "Pending",
+        replacesSubscriptionId: existing?.subscriptionId || null,
         couponCode: couponCode || null,
         deliveryDays: customDetails?.deliveryDays || null,
-        deliveryFee,
+        ...priceBreakdown,
         customerPhone: finalPhone,
         notes: notes || null,
       };
@@ -194,8 +188,8 @@ class SubscriptionController {
       const ActivityModel = require("../models/activity.model");
       await ActivityModel.logActivity(uid, {
         type: "subscription",
-        action: existing ? "renew" : "created",
-        description: existing ? `Renewed ${plan.name || plan} subscription plan` : `Created ${plan.name || plan} subscription plan`,
+        action: "requested",
+        description: `Requested ${plan.name || plan} subscription; pending admin verification`,
         metadata: {
           plan: plan.name || plan,
           subscriptionId: newSub.subscriptionId,
@@ -206,7 +200,8 @@ class SubscriptionController {
       cache.delete(`user_subscription_${uid}`);
       cache.delete(`user_subscriptions_${uid}`);
 
-      ResponseUtil.send(res, 201, "Subscription created", newSub);
+      for (const key of ["admin_all_subscriptions", "admin_dashboard_stats", "admin_all_users", "admin_today_deliveries"]) cache.delete(key);
+      ResponseUtil.send(res, 201, "Subscription pending admin verification", newSub);
     } catch (error) {
       console.error("Error creating subscription:", error);
       ResponseUtil.error(res, 500, "Failed to create subscription", error);
@@ -240,7 +235,7 @@ class SubscriptionController {
         );
       }
 
-      const subs = await SubscriptionModel.getActiveUserSubscriptions(uid);
+      const subs = await SubscriptionModel.getActiveUserSubscriptions(uid, true);
       cache.set(`user_subscriptions_${uid}`, subs, 300); // 5 minutes cache
 
       ResponseUtil.send(res, 200, "Active subscriptions fetched", subs);

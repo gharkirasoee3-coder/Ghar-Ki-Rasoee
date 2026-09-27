@@ -20,8 +20,8 @@ interface UserSubscriptionSummary {
   subscriptionId: string;
   plan: string;
   status: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   skippedDatesCount: number;
   remainingDays: number;
   paymentStatus: string;
@@ -270,11 +270,11 @@ const AdminUsers: React.FC = () => {
                       <div className="space-y-1 text-xs text-gray-600">
                         <div className="flex items-center gap-2">
                           <span className="w-10 opacity-60">From:</span>
-                          <span className="font-medium">{new Date(u.subscription.startDate).toLocaleDateString()}</span>
+                          <span className="font-medium">{u.subscription.startDate ? new Date(u.subscription.startDate).toLocaleDateString() : 'Starts after acceptance'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="w-10 opacity-60">To:</span>
-                          <span className="font-medium">{new Date(u.subscription.endDate).toLocaleDateString()}</span>
+                          <span className="font-medium">{u.subscription.endDate ? new Date(u.subscription.endDate).toLocaleDateString() : 'Set after acceptance'}</span>
                         </div>
                       </div>
                     ) : (

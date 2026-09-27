@@ -115,6 +115,7 @@ jest.mock("../src/config/firebase.config", () => {
     firestore: () => ({
       collection: mockCollection,
       batch: mockBatch,
+      runTransaction: async callback => callback({ get: mockGet, update: mockUpdate }),
     }),
   };
 });
@@ -851,7 +852,11 @@ describe("AdminController", () => {
       // Subscription found
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }),
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }),
+      });
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }),
       });
 
       // Update mock
@@ -878,13 +883,17 @@ describe("AdminController", () => {
 
     it("should confirm COD payment for subscription when req.user, userDoc, and price are missing / default", async () => {
       req.params = { orderId: "sub-123" };
-      delete req.user; // req.user is undefined, falls back to "admin"
+      req.user = { uid: "admin-uid" }; // Authenticated admin; user profile may be missing
 
       mockGet.mockResolvedValueOnce({ exists: false }); // Order
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }), // planDetails and price missing
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }), // planDetails and price missing
       }); // Sub
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }), // planDetails and price missing
+      });
 
       mockUpdate.mockResolvedValue({});
       mockGet.mockResolvedValueOnce({
@@ -908,8 +917,12 @@ describe("AdminController", () => {
       mockGet.mockResolvedValueOnce({ exists: false }); // Order
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }),
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }),
       }); // Sub
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash", paymentStatus: "Pending", plan: "Standard" }),
+      });
 
       mockUpdate.mockResolvedValue({});
       mockGet.mockResolvedValueOnce({
@@ -936,6 +949,10 @@ describe("AdminController", () => {
         exists: true,
         data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentStatus: "Pending" }), // paymentMethod missing
       });
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentStatus: "Pending" }), // paymentMethod missing
+      });
 
       await AdminController.confirmCODPayment(req, res);
       expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "This subscription is not a Cash on Delivery subscription");
@@ -946,11 +963,15 @@ describe("AdminController", () => {
       mockGet.mockResolvedValueOnce({ exists: false });
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ paymentMethod: "Cash", paymentStatus: "Paid" }),
+        data: () => ({ status: "Active", paymentMethod: "Cash", paymentStatus: "Paid" }),
+      });
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ status: "Active", paymentMethod: "Cash", paymentStatus: "Paid" }),
       });
 
       await AdminController.confirmCODPayment(req, res);
-      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "Payment already confirmed for this subscription");
+      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 409, "Payment already confirmed for this subscription");
     });
 
     it("should return 404 if order and subscription both not found", async () => {
@@ -994,7 +1015,7 @@ describe("AdminController", () => {
 
     it("should confirm COD payment for order successfully when req.user, userDoc, and order.price are missing / default", async () => {
       req.params = { orderId: "ord-123" };
-      delete req.user; // req.user is undefined, falls back to "admin"
+      req.user = { uid: "admin-uid" }; // Authenticated admin; user profile may be missing
 
       // Order found, but price is missing
       mockGet.mockResolvedValueOnce({
@@ -1081,7 +1102,7 @@ describe("AdminController", () => {
 
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentMethod: "Cash on Delivery", paymentStatus: "Pending", plan: "Standard" }),
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash on Delivery", paymentStatus: "Pending", plan: "Standard" }),
       });
 
       mockUpdate.mockResolvedValue({});
@@ -1102,7 +1123,7 @@ describe("AdminController", () => {
 
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentMethod: "Cash on Delivery", paymentStatus: "Pending", plan: "Standard" }),
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash on Delivery", paymentStatus: "Pending", plan: "Standard" }),
       });
 
       mockUpdate.mockResolvedValue({});
@@ -1136,11 +1157,11 @@ describe("AdminController", () => {
 
     it("should confirm COD subscription payment successfully when req.user is missing", async () => {
       req.params = { subscriptionId: "sub-123" };
-      delete req.user; // req.user is undefined, falls back to "admin"
+      req.user = { uid: "admin-uid" }; // Authenticated admin; user profile may be missing
 
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ subscriptionId: "sub-123", userId: "user-123", paymentMethod: "Cash on Delivery", paymentStatus: "Pending", plan: "Standard" }),
+        data: () => ({ subscriptionId: "sub-123", userId: "user-123", status: "Active", paymentMethod: "Cash on Delivery", paymentStatus: "Pending", plan: "Standard" }),
       });
 
       mockUpdate.mockResolvedValue({});
@@ -1167,11 +1188,11 @@ describe("AdminController", () => {
       req.params = { subscriptionId: "sub-123" };
       mockGet.mockResolvedValueOnce({
         exists: true,
-        data: () => ({ paymentMethod: "Cash", paymentStatus: "Paid" }),
+        data: () => ({ status: "Active", paymentMethod: "Cash", paymentStatus: "Paid" }),
       });
 
       await AdminController.confirmSubscriptionPayment(req, res);
-      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "Payment already confirmed for this subscription");
+      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 409, "Payment already confirmed for this subscription");
     });
 
     it("should handle error in confirmSubscriptionPayment", async () => {

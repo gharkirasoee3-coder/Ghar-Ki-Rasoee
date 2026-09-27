@@ -24,7 +24,12 @@ interface Subscription {
   isRecurring: boolean;
   couponCode?: string | null;
   deliveryDays?: string[];
+  subtotal?: number;
+  discountAmount?: number;
+  discountedSubtotal?: number;
   deliveryFee?: number;
+  platformServiceFee?: number;
+  totalAmount?: number;
 }
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -95,6 +100,7 @@ const MySubscription: React.FC = () => {
       return res.data.data;
     },
     enabled: !!user,
+    refetchInterval: 30000,
   });
 
   // Fetch scheduled holidays
@@ -120,7 +126,7 @@ const MySubscription: React.FC = () => {
       );
       return res.data.data?.customization;
     },
-    enabled: !!user && !!subscription?.subscriptionId,
+    enabled: !!user && !!subscription?.subscriptionId && subscription.status === 'Active',
   });
 
   // Mutation for Skipping Date
@@ -265,7 +271,7 @@ const MySubscription: React.FC = () => {
           {subscriptions.length > 1 && (
             <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <span className="text-sm font-bold text-text-secondary flex items-center gap-1.5">
-                <span>👥</span> You have {subscriptions.length} active plans. Switch to view:
+                <span>👥</span> You have {subscriptions.length} plans. Switch to view:
               </span>
               <div className="flex flex-wrap gap-2">
                 {subscriptions.map((sub, idx) => (
@@ -291,7 +297,24 @@ const MySubscription: React.FC = () => {
             {/* Main Plan Card column */}
             <div className="md:col-span-2 space-y-6">
               
-              {subscription.status === 'Cancelled' || subscription.status === 'Expired' ? (
+              {subscription.status === 'Pending' ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-8" role="status">
+                  <h2 className="text-xl font-bold text-amber-900 mb-3">Pending for admin verification</h2>
+                  <p className="font-semibold text-text-primary mb-2">{subscription.plan} Plan</p>
+                  <p className="text-sm text-amber-900 mb-4">
+                    Your subscription request has been received. Deliveries and meal customization will become available after admin acceptance. COD payment can be confirmed separately when you pay.
+                  </p>
+                  <p className="text-sm text-text-secondary">ID: {subscription.subscriptionId.slice(-8).toUpperCase()}</p>
+                  {subscription.totalAmount !== undefined && (
+                    <div className="bg-white/80 border border-amber-200 rounded-lg p-4 mt-4 text-sm space-y-1">
+                      <div className="flex justify-between"><span>Delivery Fee</span><span>${(subscription.deliveryFee || 0).toFixed(2)} CAD</span></div>
+                      <div className="flex justify-between"><span>Platform Service Fee</span><span>${(subscription.platformServiceFee || 0).toFixed(2)} CAD</span></div>
+                      <div className="flex justify-between font-bold border-t border-amber-200 pt-2 mt-2"><span>Total Due</span><span>${subscription.totalAmount.toFixed(2)} CAD</span></div>
+                    </div>
+                  )}
+                  <p className="text-sm text-text-secondary mt-2">Your invoice will be emailed after the admin confirms COD payment.</p>
+                </div>
+              ) : subscription.status === 'Cancelled' || subscription.status === 'Expired' ? (
                 /* Ended subscription card */
                 <div className="bg-white rounded-xl p-8 border border-gray-200 text-center relative overflow-hidden">
                   <div className="w-20 h-20 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-100">
@@ -350,6 +373,21 @@ const MySubscription: React.FC = () => {
                       </div>
                       <StatusBadge status={subscription.status} />
                     </div>
+
+                    {['cash on delivery', 'cod', 'cash'].includes(subscription.paymentMethod.toLowerCase()) && subscription.paymentStatus !== 'Paid' && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6" role="status">
+                        <p className="font-bold text-amber-900">COD pending</p>
+                        <p className="text-sm text-amber-800 mt-1">Your subscription is active. Your invoice will be emailed after the admin confirms your COD payment.</p>
+                      </div>
+                    )}
+
+                    {subscription.totalAmount !== undefined && (
+                      <div className="bg-white rounded-lg p-4 mb-6 text-sm space-y-1">
+                        <div className="flex justify-between"><span>Delivery Fee</span><span>${(subscription.deliveryFee || 0).toFixed(2)} CAD</span></div>
+                        <div className="flex justify-between"><span>Platform Service Fee</span><span>${(subscription.platformServiceFee || 0).toFixed(2)} CAD</span></div>
+                        <div className="flex justify-between font-bold border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>${subscription.totalAmount.toFixed(2)} CAD</span></div>
+                      </div>
+                    )}
 
                     {/* Dates grid */}
                     <div className="grid grid-cols-2 gap-4 mb-6">
@@ -495,7 +533,7 @@ const MySubscription: React.FC = () => {
 
             {/* Sidebar Column */}
             <div className="space-y-6">
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              {subscription.status === 'Active' && <div className="bg-white border border-gray-200 rounded-xl p-6">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                   <Calendar size={20} className="text-primary" />
                   Weekly Schedule
@@ -526,7 +564,7 @@ const MySubscription: React.FC = () => {
                     <span className="font-medium">Sundays</span>
                   </div>
                 </div>
-              </div>
+              </div>}
 
               {/* Skipped Dates History (Tied to the selected plan) */}
               {subscription.skippedDates && subscription.skippedDates.length > 0 && (

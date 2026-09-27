@@ -811,62 +811,7 @@ class AdminController {
       if (!orderDoc.exists) {
         const subDoc = await db.collection("subscriptions").doc(orderId).get();
         if (subDoc.exists) {
-          const subscription = subDoc.data();
-          const paymentMethod = (subscription.paymentMethod || "").toLowerCase();
-          if (!paymentMethod.includes("cash") && !paymentMethod.includes("cod")) {
-            return ResponseUtil.error(res, 400, "This subscription is not a Cash on Delivery subscription");
-          }
-          if (subscription.paymentStatus === "Paid") {
-            return ResponseUtil.error(res, 400, "Payment already confirmed for this subscription");
-          }
-          await db.collection("subscriptions").doc(orderId).update({
-            paymentStatus: "Paid",
-            paymentCollectedBy: req.user?.uid || "admin",
-            paymentCollectedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          const ActivityModel = require("../models/activity.model");
-          const planPrice = subscription.planDetails?.price || subscription.price || 0;
-
-          // Fetch user details for confirmation email
-          const userDoc = await db.collection("users").doc(subscription.userId).get();
-          const userData = userDoc.exists ? userDoc.data() : {};
-          
-          // Send payment confirmation email
-          const EmailService = require("../services/email.service");
-          await EmailService.sendPaymentConfirmationEmail({
-            userEmail: userData.email,
-            userName: userData.name || userData.displayName || userData.email?.split("@")[0],
-            amount: planPrice,
-            paymentMethod: "Cash on Delivery",
-            paymentType: "subscription",
-            details: subscription,
-            deliveryAddress: subscription.deliveryAddress,
-            transactionId: subscription.subscriptionId
-          }).catch(err => console.error("Failed to send subscription payment confirmation email:", err));
-
-          await ActivityModel.logActivity(subscription.userId, {
-            type: "subscription",
-            action: "cod_collected",
-            description: `COD payment of $${planPrice} collected for subscription #${orderId.slice(0, 8)}`,
-            metadata: { subscriptionId: orderId, amount: planPrice, collectedBy: "admin" },
-          });
-
-          await NotificationModel.create(subscription.userId, {
-            type: "payment",
-            title: "COD Payment Confirmed",
-            message: `Your Cash on Delivery payment of $${Number(planPrice).toFixed(2)} CAD for the ${subscription.plan} subscription plan has been confirmed.`,
-            metadata: { subscriptionId: orderId, amount: planPrice }
-          }).catch(err => console.error("Failed to create subscription COD payment notification:", err));
-          cache.delete("admin_dashboard_stats");
-          cache.delete("admin_all_subscriptions");
-          cache.delete("admin_all_users");
-          cache.delete(`user_subscription_${subscription.userId}`);
-          cache.delete(`user_subscriptions_${subscription.userId}`);
-          return ResponseUtil.send(res, 200, "Subscription COD payment confirmed successfully", {
-            orderId,
-            paymentStatus: "Paid",
-          });
+          return AdminController.confirmSubscriptionPayment({ ...req, params: { ...req.params, subscriptionId: orderId } }, res);
         }
         return ResponseUtil.error(res, 404, "Order not found");
       }
@@ -904,6 +849,7 @@ class AdminController {
         paymentMethod: "Cash on Delivery",
         paymentType: "one-time",
         details: order.items,
+        feeBreakdown: order,
         deliveryAddress: order.deliveryAddress,
         transactionId: order.orderId
       }).catch(err => console.error("Failed to send order payment confirmation email:", err));
@@ -939,6 +885,77 @@ class AdminController {
     }
   }
 
+  static async acceptSubscription(req, res) {
+    try {
+      const { subscriptionId } = req.params;
+      if (!subscriptionId) return ResponseUtil.error(res, 400, "Subscription ID is required");
+      const ref = db.collection("subscriptions").doc(subscriptionId);
+      const result = await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(ref);
+        if (!doc.exists) return { error: "Subscription not found", code: 404 };
+        const sub = doc.data();
+        if (!AdminController.isCOD(sub.paymentMethod)) return { error: "This subscription is not a Cash on Delivery subscription", code: 400 };
+        if (sub.status !== "Pending" || sub.approvalStatus === "Accepted") return { error: "Only pending subscriptions can be accepted", code: 409 };
+        const oldRef = sub.replacesSubscriptionId ? db.collection("subscriptions").doc(sub.replacesSubscriptionId) : null;
+        const oldDoc = oldRef ? await transaction.get(oldRef) : null;
+        const oldSub = oldDoc?.exists ? oldDoc.data() : null;
+        if (oldSub && oldSub.userId !== sub.userId) return { error: "Invalid replacement subscription", code: 400 };
+        if (oldRef && (!oldSub || oldSub.status !== "Active")) return { error: "The subscription being replaced is no longer active; create a new request", code: 409 };
+        const now = new Date();
+        const endDate = new Date(now);
+        const duration = Number(sub.durationDays || 30);
+        if (!Number.isFinite(duration) || duration <= 0) return { error: "Invalid subscription duration", code: 400 };
+        endDate.setDate(endDate.getDate() + duration);
+        const updates = {
+          status: "Active", approvalStatus: "Accepted", acceptedAt: now.toISOString(),
+          acceptedBy: req.user.uid, startDate: now.toISOString(), endDate: endDate.toISOString(),
+          updatedAt: now.toISOString(),
+        };
+        let stripeSubscriptionId = null;
+        if (oldSub?.status === "Active") {
+          transaction.update(oldRef, { status: "Renewed", updatedAt: now.toISOString() });
+          stripeSubscriptionId = oldSub.stripeSubscriptionId || null;
+          if (stripeSubscriptionId) {
+            updates.replacedStripeSubscriptionId = stripeSubscriptionId;
+            updates.billingCancellationPending = true;
+          }
+        }
+        transaction.update(ref, updates);
+        return { subscription: { ...sub, ...updates }, stripeSubscriptionId };
+      });
+      if (result.error) return ResponseUtil.error(res, result.code, result.error);
+      const sub = result.subscription;
+      AdminController.invalidateSubscriptionCaches(sub.userId);
+      let billingCancellationPending = false;
+      if (result.stripeSubscriptionId) {
+        try {
+          await require("../services/stripe.service").cancelSubscription(result.stripeSubscriptionId);
+          await ref.update({ billingCancellationPending: false });
+        } catch (error) {
+          billingCancellationPending = true;
+          console.error("Failed to cancel replaced Stripe billing:", error);
+        }
+      }
+      await require("../models/activity.model").logActivity(sub.userId, {
+        type: "subscription", action: "accepted",
+        description: `Subscription ${sub.plan} accepted; COD payment pending`,
+        metadata: { subscriptionId, acceptedBy: req.user.uid },
+      }).catch(error => console.error("Failed to log subscription acceptance:", error));
+      return ResponseUtil.send(res, 200, "Subscription accepted; COD payment pending", { ...sub, billingCancellationPending });
+    } catch (error) {
+      console.error("Error accepting subscription:", error);
+      return ResponseUtil.error(res, 500, "Failed to accept subscription", error);
+    }
+  }
+
+  static isCOD(paymentMethod) {
+    return ["cash on delivery", "cod", "cash"].includes(String(paymentMethod || "").toLowerCase());
+  }
+
+  static invalidateSubscriptionCaches(userId) {
+    for (const key of ["admin_dashboard_stats", "admin_all_subscriptions", "admin_all_users", "admin_today_deliveries", `user_subscription_${userId}`, `user_subscriptions_${userId}`]) cache.delete(key);
+  }
+
   /**
    * Admin confirms COD payment for a subscription
    */
@@ -949,40 +966,35 @@ class AdminController {
         return ResponseUtil.error(res, 400, "Subscription ID is required");
       }
 
-      const subDoc = await db.collection("subscriptions").doc(subscriptionId).get();
-      if (!subDoc.exists) {
-        return ResponseUtil.error(res, 404, "Subscription not found");
-      }
-
-      const subscription = subDoc.data();
-
-      // Validate it's a COD subscription
-      const paymentMethod = (subscription.paymentMethod || "").toLowerCase();
-      if (!paymentMethod.includes("cash") && !paymentMethod.includes("cod")) {
-        return ResponseUtil.error(res, 400, "This subscription is not a Cash on Delivery subscription");
-      }
-
-      if (subscription.paymentStatus === "Paid") {
-        return ResponseUtil.error(res, 400, "Payment already confirmed for this subscription");
-      }
-
-      // Update payment status to Paid
-      await db.collection("subscriptions").doc(subscriptionId).update({
-        paymentStatus: "Paid",
-        paymentCollectedBy: req.user?.uid || "admin",
-        paymentCollectedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      const ref = db.collection("subscriptions").doc(subscriptionId);
+      const result = await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(ref);
+        if (!doc.exists) return { error: "Subscription not found", code: 404 };
+        const sub = doc.data();
+        if (!AdminController.isCOD(sub.paymentMethod)) return { error: "This subscription is not a Cash on Delivery subscription", code: 400 };
+        if (sub.status === "Pending" || sub.approvalStatus === "Pending") return { error: "Accept the subscription before confirming COD payment", code: 409 };
+        if (!["Active", "Expired", "Cancelled", "Renewed"].includes(sub.status)) return { error: "Subscription has not been accepted", code: 409 };
+        if (sub.paymentStatus === "Paid") return { error: "Payment already confirmed for this subscription", code: 409 };
+        const updates = {
+          paymentStatus: "Paid", paymentCollectedBy: req.user.uid,
+          paymentCollectedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        };
+        transaction.update(ref, updates);
+        return { subscription: { ...sub, ...updates } };
       });
+      if (result.error) return ResponseUtil.error(res, result.code, result.error);
+      const subscription = result.subscription;
+      AdminController.invalidateSubscriptionCaches(subscription.userId);
 
       const planPrice = subscription.planDetails?.price || subscription.price || 0;
 
       // Fetch user details for confirmation email
-      const userDoc = await db.collection("users").doc(subscription.userId).get();
-      const userData = userDoc.exists ? userDoc.data() : {};
+      const userDoc = await db.collection("users").doc(subscription.userId).get().catch(error => { console.error("Failed to load invoice recipient:", error); return null; });
+      const userData = userDoc?.exists ? userDoc.data() : {};
 
       // Send payment confirmation email
       const EmailService = require("../services/email.service");
-      await EmailService.sendPaymentConfirmationEmail({
+      const invoiceEmailSent = await EmailService.sendPaymentConfirmationEmail({
         userEmail: userData.email,
         userName: userData.name || userData.displayName || userData.email?.split("@")[0],
         amount: planPrice,
@@ -991,7 +1003,8 @@ class AdminController {
         details: subscription,
         deliveryAddress: subscription.deliveryAddress,
         transactionId: subscription.subscriptionId
-      }).catch(err => console.error("Failed to send subscription payment confirmation email:", err));
+      }).catch(err => { console.error("Failed to send subscription payment confirmation email:", err); return false; });
+      await ref.update({ invoiceEmailStatus: invoiceEmailSent ? "Sent" : "Failed" }).catch(err => console.error("Failed to record invoice email status:", err));
 
       // Log activity
       const ActivityModel = require("../models/activity.model");
@@ -1000,7 +1013,7 @@ class AdminController {
         action: "cod_collected",
         description: `COD payment of $${planPrice} collected for subscription #${subscriptionId.slice(0, 8)}`,
         metadata: { subscriptionId, amount: planPrice, collectedBy: "admin" },
-      });
+      }).catch(error => console.error("Failed to log COD collection:", error));
 
       await NotificationModel.create(subscription.userId, {
         type: "payment",
@@ -1019,6 +1032,7 @@ class AdminController {
       ResponseUtil.send(res, 200, "Subscription COD payment confirmed successfully", {
         subscriptionId,
         paymentStatus: "Paid",
+        invoiceEmailSent: Boolean(invoiceEmailSent),
       });
     } catch (error) {
       console.error("Error confirming subscription COD payment:", error);

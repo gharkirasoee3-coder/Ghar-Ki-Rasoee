@@ -76,6 +76,7 @@ class EmailService {
     paymentMethod,
     paymentType, // 'subscription' | 'one-time' | 'renewal'
     details, // subscription details (plan, planDetails) or order items
+    feeBreakdown,
     deliveryAddress,
     transactionId,
     date
@@ -93,6 +94,25 @@ class EmailService {
 
       let detailHtml = "";
       let typeLabel = "Subscription Plan";
+      const persistedFees = feeBreakdown || (
+        details && !Array.isArray(details) ? details : null
+      );
+      const deliveryFee = Number(persistedFees?.deliveryFee || 0);
+      const platformServiceFee = Number(persistedFees?.platformServiceFee || 0);
+      const feeBreakdownHtml = deliveryFee > 0 || platformServiceFee > 0 ? `
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px; border-top: 1px solid #e5e7eb;">
+          ${deliveryFee > 0 ? `
+          <tr>
+            <td style="padding: 10px 0 4px; font-size: 14px; color: #6b7280;">Delivery Fee</td>
+            <td style="padding: 10px 0 4px; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">$${deliveryFee.toFixed(2)} CAD</td>
+          </tr>` : ""}
+          ${platformServiceFee > 0 ? `
+          <tr>
+            <td style="padding: 4px 0; font-size: 14px; color: #6b7280;">Platform Service Fee</td>
+            <td style="padding: 4px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">$${platformServiceFee.toFixed(2)} CAD</td>
+          </tr>` : ""}
+        </table>
+      ` : "";
 
       if (paymentType === 'subscription') {
         typeLabel = "Subscription Purchase";
@@ -168,6 +188,7 @@ class EmailService {
         </table>
         
         ${detailHtml}
+        ${feeBreakdownHtml}
       </div>
 
       <!-- Delivery Address Section -->

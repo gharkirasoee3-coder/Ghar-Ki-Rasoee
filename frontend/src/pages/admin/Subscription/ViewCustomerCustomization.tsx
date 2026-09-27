@@ -193,7 +193,11 @@ const ViewCustomerCustomization: React.FC = () => {
                   </p>
                   <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
                       <Calendar size={12} />
-                      <span>Ends: {new Date(customerInfo.endDate).toLocaleDateString()}</span>
+                      <span>
+                        Ends: {customerInfo.endDate
+                          ? new Date(customerInfo.endDate).toLocaleDateString()
+                          : 'Set after acceptance'}
+                      </span>
                   </div>
               </div>
           </div>

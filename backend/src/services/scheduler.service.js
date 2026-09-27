@@ -158,10 +158,10 @@ class SchedulerService {
           orderType: "Subscription",
           plan: sub.plan, // e.g. "Weekly Plan"
           items: finalPreference, // Store the exact meal items!
-          price: 0, // Already paid via subscription
+          price: 0, // Billed at subscription level; never collect per-delivery payment
           deliveryDate: todayString,
-          paymentMethod: "Prepaid (Subscription)",
-          paymentStatus: "Paid",
+          paymentMethod: sub.paymentStatus === "Pending" ? "Subscription" : "Prepaid (Subscription)",
+          paymentStatus: sub.paymentStatus || "Paid",
           status: "Cooking", // Auto-set to cooking for the day
           generatedByScheduler: true,
         };

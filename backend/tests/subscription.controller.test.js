@@ -187,7 +187,7 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should fallback planName when plan.name is falsy", async () => {
@@ -200,7 +200,7 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should handle user address update failure gracefully during subscription", async () => {
@@ -214,7 +214,7 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.createSubscription(req, res);
       expect(spyConsoleError).toHaveBeenCalledWith("Error updating user address during sub:", expect.any(Error));
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should validate standard plan price and succeed if correct", async () => {
@@ -234,7 +234,7 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.createSubscription(req, res);
       expect(ResponseUtil.error).not.toHaveBeenCalled();
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should fail standard plan checkout if pricing validation fails", async () => {
@@ -280,7 +280,7 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.createSubscription(req, res);
       expect(ResponseUtil.error).not.toHaveBeenCalled();
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should handle coupon code verification - invalid coupon", async () => {
@@ -378,7 +378,7 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
       expect(CouponModel.incrementUsage).toHaveBeenCalledWith("PERCENT_CAP");
     });
 
@@ -403,7 +403,7 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should handle unknown coupon discountType gracefully", async () => {
@@ -426,7 +426,7 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should apply fixed discount coupon correctly", async () => {
@@ -449,15 +449,15 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
       expect(spyConsoleError).toHaveBeenCalledWith("Failed to increment coupon usage count:", expect.any(Error));
     });
 
-    it("should replace existing subscription and cancel old Stripe billing", async () => {
-      SubscriptionModel.getUserSubscription.mockResolvedValue({
+    it("should defer replacement and Stripe cancellation until acceptance", async () => {
+      SubscriptionModel.getActiveUserSubscriptions.mockResolvedValue([{
         subscriptionId: "old-sub-1",
         stripeSubscriptionId: "stripe-sub-123",
-      });
+      }]);
 
       const StripeService = require("../src/services/stripe.service");
       StripeService.cancelSubscription.mockResolvedValue(true);
@@ -473,16 +473,17 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.createSubscription(req, res);
 
-      expect(StripeService.cancelSubscription).toHaveBeenCalledWith("stripe-sub-123");
+      expect(StripeService.cancelSubscription).not.toHaveBeenCalled();
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith("user-123", expect.objectContaining({ replacesSubscriptionId: "old-sub-1" }));
       expect(mockUpdate).toHaveBeenCalled();
       expect(cache.delete).toHaveBeenCalledWith("user_subscription_user-123");
       expect(cache.delete).toHaveBeenCalledWith("user_subscriptions_user-123");
     });
 
     it("should replace existing subscription but skip Stripe cancel if no stripeSubscriptionId", async () => {
-      SubscriptionModel.getUserSubscription.mockResolvedValue({
+      SubscriptionModel.getActiveUserSubscriptions.mockResolvedValue([{
         subscriptionId: "old-sub-1",
-      });
+      }]);
 
       mockUpdate.mockResolvedValue({});
       SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "new-sub-1" });
@@ -494,7 +495,7 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should skip replacing existing subscription when replacePlan is false or 'false'", async () => {
@@ -515,11 +516,11 @@ describe("SubscriptionController", () => {
       expect(SubscriptionModel.getUserSubscription).not.toHaveBeenCalled();
     });
 
-    it("should handle error when canceling Stripe subscription fails", async () => {
-      SubscriptionModel.getUserSubscription.mockResolvedValue({
+    it("should not attempt Stripe cancellation during pending checkout", async () => {
+      SubscriptionModel.getActiveUserSubscriptions.mockResolvedValue([{
         subscriptionId: "old-sub-1",
         stripeSubscriptionId: "stripe-sub-123",
-      });
+      }]);
 
       const StripeService = require("../src/services/stripe.service");
       StripeService.cancelSubscription.mockRejectedValue(new Error("Stripe cancel failed"));
@@ -535,8 +536,8 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.createSubscription(req, res);
 
-      expect(spyConsoleError).toHaveBeenCalledWith("Failed to cancel old Stripe subscription billing:", expect.any(Error));
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription created", expect.any(Object));
+      expect(StripeService.cancelSubscription).not.toHaveBeenCalled();
+      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
     it("should handle general subscription creation error", async () => {
@@ -605,7 +606,7 @@ describe("SubscriptionController", () => {
 
       await SubscriptionController.getSubscription(req, res);
 
-      expect(SubscriptionModel.getActiveUserSubscriptions).toHaveBeenCalledWith("user-123");
+      expect(SubscriptionModel.getActiveUserSubscriptions).toHaveBeenCalledWith("user-123", true);
       expect(cache.set).toHaveBeenCalledWith("user_subscriptions_user-123", expect.any(Array), 300);
       expect(ResponseUtil.send).toHaveBeenCalledWith(res, 200, "Active subscriptions fetched", expect.any(Array));
     });

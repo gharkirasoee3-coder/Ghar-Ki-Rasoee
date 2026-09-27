@@ -43,6 +43,64 @@ class PriceUtil {
 
     return parseFloat(total.toFixed(2));
   }
+
+  /** Convert a CAD amount to integer cents so fee calculations stay deterministic. */
+  static toCents(amount) {
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount)) return 0;
+    return Math.round(numericAmount * 100);
+  }
+
+  static fromCents(cents) {
+    const numericCents = Number(cents);
+    if (!Number.isFinite(numericCents)) return 0;
+    return Number((Math.round(numericCents) / 100).toFixed(2));
+  }
+
+  static roundCurrency(amount) {
+    return this.fromCents(this.toCents(amount));
+  }
+
+  /** Platform fee is 2.5% of the discounted subtotal plus CAD $0.30. */
+  static calculatePlatformServiceFee(discountedSubtotal) {
+    const subtotalInCents = Math.max(0, this.toCents(discountedSubtotal));
+    return this.fromCents(Math.round(subtotalInCents * 0.025) + 30);
+  }
+
+  /**
+   * Build the canonical server-side charge breakdown. Delivery eligibility is
+   * intentionally based on the undiscounted subtotal; coupons cannot change it.
+   */
+  static calculateChargeBreakdown(basePrice, discountAmount = 0, deliverySettings = {}) {
+    const basePriceInCents = Math.max(0, this.toCents(basePrice));
+    const discountInCents = Math.min(
+      basePriceInCents,
+      Math.max(0, this.toCents(discountAmount)),
+    );
+    const discountedSubtotalInCents = basePriceInCents - discountInCents;
+    const thresholdInCents = Math.max(
+      0,
+      this.toCents(deliverySettings.minAmountForFreeDelivery),
+    );
+    const deliveryFeeInCents = basePriceInCents < thresholdInCents
+      ? Math.max(0, this.toCents(deliverySettings.deliveryFee))
+      : 0;
+    const platformServiceFeeInCents =
+      Math.round(discountedSubtotalInCents * 0.025) + 30;
+    const totalInCents = discountedSubtotalInCents
+      + deliveryFeeInCents
+      + platformServiceFeeInCents;
+
+    return {
+      basePrice: this.fromCents(basePriceInCents),
+      subtotal: this.fromCents(basePriceInCents),
+      discountAmount: this.fromCents(discountInCents),
+      discountedSubtotal: this.fromCents(discountedSubtotalInCents),
+      deliveryFee: this.fromCents(deliveryFeeInCents),
+      platformServiceFee: this.fromCents(platformServiceFeeInCents),
+      totalAmount: this.fromCents(totalInCents),
+    };
+  }
 }
 
 module.exports = PriceUtil;

@@ -699,7 +699,7 @@ const CustomizePlan: React.FC = () => {
               <div className="bg-amber-50/80 border border-amber-200/80 p-3.5 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
                 <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
-                  <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                  <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to every payment method, including Cash on Delivery.
                 </p>
               </div>
 

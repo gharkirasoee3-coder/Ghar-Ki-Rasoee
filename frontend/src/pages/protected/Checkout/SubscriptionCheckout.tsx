@@ -7,11 +7,14 @@ import axios from 'axios';
 import { ENV } from '../../../config/env.config';
 import LocationPicker from '../../../components/common/LocationPicker';
 import { useCity } from '../../../context/CityContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
 
 const SubscriptionCheckout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { plan, address: prefilledAddress } = location.state || {};
   const { selectedCity } = useCity();
@@ -121,27 +124,20 @@ const SubscriptionCheckout: React.FC = () => {
   const getCouponAmounts = () => {
     const baseAmount = getAdjustedPrice();
     if (!appliedCoupon) return { discountAmount: 0, finalAmount: baseAmount };
-
-    let discount = 0;
-    if (appliedCoupon.discountType === 'percentage') {
-      discount = baseAmount * (appliedCoupon.discountValue / 100);
-    } else {
-      discount = appliedCoupon.discountValue;
-    }
-    discount = Math.min(discount, baseAmount);
-    const minCharge = paymentMethod === 'Stripe' ? 0.50 : 0;
-    const final = Math.max(minCharge, baseAmount - discount);
     return {
-      discountAmount: discount,
-      finalAmount: Math.round(final * 100) / 100
+      discountAmount: appliedCoupon.discountAmount,
+      finalAmount: paymentMethod === 'Stripe'
+        ? Math.max(0.50, appliedCoupon.finalAmount)
+        : appliedCoupon.finalAmount,
     };
   };
 
   const { discountAmount, finalAmount } = getCouponAmounts();
   const basePriceForDelivery = getAdjustedPrice();
-  const isFreeDelivery = isOneTime || basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
+  const isFreeDelivery = (isOneTime && paymentMethod === 'Stripe')
+    || basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
   const deliveryFee = isFreeDelivery ? 0 : deliverySettings.deliveryFee;
-  const serviceFee = paymentMethod === 'Stripe' ? Math.round((finalAmount * 0.025 + 0.30) * 100) / 100 : 0;
+  const serviceFee = Math.round((finalAmount * 0.025 + 0.30) * 100) / 100;
   const totalAmount = Math.round((finalAmount + deliveryFee + serviceFee) * 100) / 100;
 
   useEffect(() => {
@@ -374,6 +370,8 @@ const SubscriptionCheckout: React.FC = () => {
           );
 
           if (response.data.success) {
+            await queryClient.invalidateQueries({ queryKey: ['mySubscriptions'] });
+            toast.success('Pending for admin verification. Your invoice will be emailed after COD payment is confirmed.');
             navigate('/my-subscription');
           } else {
             throw new Error(response.data.message || "Failed to create subscription");
@@ -572,15 +570,13 @@ const SubscriptionCheckout: React.FC = () => {
                   )}
                 </div>
 
-                {paymentMethod === 'Stripe' && (
-                  <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
-                    <span className="flex items-center gap-1 font-medium">
-                      <span>Platform Service Fee</span>
-                      <span className="text-[10px] text-gray-400 font-normal">(2.5% + $0.30)</span>
-                    </span>
-                    <span className="font-semibold text-gray-900 whitespace-nowrap">+${serviceFee.toFixed(2)} CAD</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
+                  <span className="flex items-center gap-1 font-medium">
+                    <span>Platform Service Fee</span>
+                    <span className="text-[10px] text-gray-400 font-normal">(2.5% + $0.30)</span>
+                  </span>
+                  <span className="font-semibold text-gray-900 whitespace-nowrap">+${serviceFee.toFixed(2)} CAD</span>
+                </div>
 
                 {deliveryFee > 0 && (
                   <p className="text-[10px] text-gray-400 font-bold leading-normal pt-1">
@@ -592,7 +588,7 @@ const SubscriptionCheckout: React.FC = () => {
               <div className="flex justify-between items-center border-t border-gray-200 pt-4 mt-4">
                 <div>
                   <span className="text-base sm:text-lg font-black text-gray-900 block">Total Due</span>
-                  <span className="text-[11px] sm:text-xs text-gray-400 font-medium">All fees & taxes included</span>
+                  <span className="text-[11px] sm:text-xs text-gray-400 font-medium">Delivery and platform fees included</span>
                 </div>
                 <div className="text-right">
                   <div className="inline-flex items-baseline justify-end gap-1.5 whitespace-nowrap">
@@ -607,13 +603,13 @@ const SubscriptionCheckout: React.FC = () => {
               <div className="mt-4 bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
                 <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
-                  <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to all online orders and will be added at checkout.
+                  <strong>Platform Service Fee:</strong> A 2.5% service fee + $0.30 platform fee applies to every payment method, including Cash on Delivery.
                 </p>
               </div>
 
               {appliedCoupon && appliedCoupon.duration === 'repeating' && (
                 <p className="text-[10px] text-gray-400 font-bold text-right mt-2 leading-snug">
-                  Charges automatically renew at ${(getAdjustedPrice() + deliveryFee + (paymentMethod === 'Stripe' ? Math.round((getAdjustedPrice() * 0.025 + 0.30) * 100) / 100 : 0)).toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
+                  Charges automatically renew at ${(getAdjustedPrice() + deliveryFee + Math.round((getAdjustedPrice() * 0.025 + 0.30) * 100) / 100).toFixed(2)} CAD/mo after {appliedCoupon.durationInMonths} month(s).
                 </p>
               )}
 
@@ -715,6 +711,12 @@ const SubscriptionCheckout: React.FC = () => {
                         key={day}
                         type="button"
                         onClick={() => {
+                          if (appliedCoupon) {
+                            setAppliedCoupon(null);
+                            setCouponInput('');
+                            setCouponSuccess('');
+                            setCouponError('Delivery schedule changed. Please apply your coupon again.');
+                          }
                           if (isSelected) {
                             setSelectedDays(selectedDays.filter((d) => d !== day));
                           } else {
@@ -845,7 +847,7 @@ const SubscriptionCheckout: React.FC = () => {
                     </div>
                     <div>
                       <span className="font-bold text-gray-900 block">Cash on Delivery</span>
-                      <span className="text-xs text-gray-400">Pay when delivered</span>
+                      <span className="text-xs text-gray-500">{isOneTime ? 'Pay when delivered' : 'Admin approval starts deliveries. Payment is confirmed separately.'}</span>
                     </div>
                   </div>
                 </label>
