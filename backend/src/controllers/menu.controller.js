@@ -7,7 +7,7 @@ class MenuController {
    */
   static async getAllPlans(req, res) {
     try {
-      const config = await MenuModel.getMenuConfig();
+      const config = await MenuModel.getMenuConfig(true);
       const city = req.query.city;
       const categoryKey = MenuModel.getCityCategory(city, config);
       const categoryConfig = config.cityCategories?.[categoryKey];
@@ -38,11 +38,39 @@ class MenuController {
       ResponseUtil.send(res, 200, "Plans retrieved successfully", {
         plans,
         customPricingConfig,
-        deliveryFeeSettings
+        deliveryFeeSettings,
+        cityCategories: config.cityCategories || {}
       });
     } catch (error) {
       console.error("Error getting plans:", error);
       ResponseUtil.error(res, 500, "Failed to retrieve plans", error);
+    }
+  }
+
+  /**
+   * Get dynamic supported cities configured by admin
+   */
+  static async getSupportedCities(req, res) {
+    try {
+      const config = await MenuModel.getMenuConfig(true);
+      ResponseUtil.send(res, 200, "Supported cities retrieved successfully", {
+        cityCategories: config.cityCategories || {}
+      });
+    } catch (error) {
+      console.error("Error getting supported cities:", error);
+      ResponseUtil.error(res, 500, "Failed to retrieve supported cities", error);
+    }
+  }
+
+  static async quoteCustomPlan(req, res) {
+    try {
+      const config = await MenuModel.getMenuConfig(true);
+      const selections = req.body?.customDetails || req.body;
+      const city = req.body?.city || selections?.city || null;
+      const quote = MenuModel.quoteCustomPlan(selections, config, city);
+      ResponseUtil.send(res, 200, "Custom plan quote calculated successfully", { quote });
+    } catch (error) {
+      ResponseUtil.error(res, 400, error.message);
     }
   }
 

@@ -6,11 +6,11 @@ import { Search, MapPin, X, Download, ExternalLink, ArrowRight, Info } from 'luc
 import { ENV } from '../../../config/env.config';
 
 import { useCity } from '../../../context/CityContext';
-import { CANADIAN_CITIES, SPECIFIC_CITIES, POPULAR_CITIES as popularCities } from '../../../config/city.config';
+import { SPECIFIC_CITIES, POPULAR_CITIES as defaultPopularCities } from '../../../config/city.config';
 
 const Menu: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { selectedCity, selectCity } = useCity();
+  const { selectedCity, selectCity, supportedCities, cityCategories, selectedCategory, openCityModal } = useCity();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [menuImages, setMenuImages] = useState<{ vancouver: string; others: string }>({
@@ -50,14 +50,21 @@ const Menu: React.FC = () => {
     setShowDropdown(false);
   };
 
-  // Filter cities based on search
-  const filteredCities = CANADIAN_CITIES.filter(city => 
+  // Filter cities based on admin configured supported cities
+  const displayCities: string[] = supportedCities.length > 0 
+    ? supportedCities.map(c => typeof c === 'string' ? c : c.name) 
+    : defaultPopularCities;
+  const filteredCities = displayCities.filter(city => 
     city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Determine if specific menu image should be shown
+  const popularCities = defaultPopularCities.filter(pc => 
+    displayCities.some(dc => dc.toLowerCase() === pc.toLowerCase())
+  ).slice(0, 8);
+
+  // Determine if specific menu image should be shown (local category or specific cities)
   const isSpecificCity = selectedCity 
-    ? SPECIFIC_CITIES.includes(selectedCity.toLowerCase().trim()) 
+    ? (selectedCategory === 'local' || SPECIFIC_CITIES.includes(selectedCity.toLowerCase().trim()))
     : false;
 
   const menuImageSrc = isSpecificCity 
@@ -111,7 +118,7 @@ const Menu: React.FC = () => {
                   </div>
                   <h3 className="text-xl font-bold text-text-primary mb-2">Select Your Delivery City</h3>
                   <p className="text-sm text-text-secondary">
-                    Menus vary by region to ensure local kitchens deliver your meals fresh and hot.
+                    Menus and delivery pricing vary by region. Select your city in British Columbia to view your menu.
                   </p>
                 </div>
 
@@ -123,7 +130,7 @@ const Menu: React.FC = () => {
                     </span>
                     <input
                       type="text"
-                      placeholder="Search your city in Canada (e.g. Burnaby, Toronto...)"
+                      placeholder="Search supported cities (e.g. Vancouver, Surrey, Abbotsford...)"
                       className="w-full pl-12 pr-10 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all shadow-inner"
                       value={searchQuery}
                       onChange={(e) => {
@@ -165,13 +172,12 @@ const Menu: React.FC = () => {
                         ))
                       ) : (
                         <div className="px-5 py-4 text-center">
-                          <p className="text-sm font-medium text-text-secondary mb-2">Can't find your city?</p>
-                          <button
-                            onClick={() => handleSelectCity(searchQuery)}
-                            className="text-sm font-bold text-primary hover:underline flex items-center gap-1 mx-auto"
-                          >
-                            Use "{searchQuery}" <ArrowRight size={14} />
-                          </button>
+                          <p className="text-sm font-semibold text-gray-700 mb-1">
+                            "{searchQuery}" is outside our delivery area
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            We currently deliver to select service areas in British Columbia.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -179,22 +185,24 @@ const Menu: React.FC = () => {
                 </div>
 
                 {/* Popular Cities Grid */}
-                <div className="max-w-lg mx-auto pt-2">
-                  <span className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3 text-center">
-                    Or select a popular city:
-                  </span>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {popularCities.map((city) => (
-                      <button
-                        key={city}
-                        onClick={() => handleSelectCity(city)}
-                        className="px-4 py-2 bg-gray-100 hover:bg-red-50 hover:text-primary border border-transparent hover:border-red-200 rounded-full text-sm font-bold text-text-primary transition-all active:scale-95"
-                      >
-                        {city}
-                      </button>
-                    ))}
+                {popularCities.length > 0 && (
+                  <div className="max-w-lg mx-auto pt-2">
+                    <span className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-3 text-center">
+                      Or select a popular city:
+                    </span>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {popularCities.map((city) => (
+                        <button
+                          key={city}
+                          onClick={() => handleSelectCity(city)}
+                          className="px-4 py-2 bg-gray-100 hover:bg-red-50 hover:text-primary border border-transparent hover:border-red-200 rounded-full text-sm font-bold text-text-primary transition-all active:scale-95"
+                        >
+                          {city}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -206,17 +214,24 @@ const Menu: React.FC = () => {
                     <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">
                       Currently Showing Menu For
                     </span>
-                    <h3 className="text-2xl font-black text-text-primary leading-tight">
-                      {selectedCity}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-2xl font-black text-text-primary leading-tight">
+                        {selectedCity}
+                      </h3>
+                      {selectedCategory && cityCategories[selectedCategory] && (
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-primary">
+                          {cityCategories[selectedCategory].name || selectedCategory}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                {/* <button
-                  onClick={handleClearSelection}
-                  className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-text-primary rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm flex items-center gap-2"
+                <button
+                  onClick={openCityModal}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-text-primary rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm flex items-center gap-2"
                 >
                   Change City
-                </button> */}
+                </button>
               </div>
             )}
           </div>

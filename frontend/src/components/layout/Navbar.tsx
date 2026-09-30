@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, User } from 'lucide-react';
+import { Menu, X, User, MapPin, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useCity } from '../../context/CityContext';
 // import { useCart } from '../../context/CartContext';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { user, role } = useAuth();
+  const { selectedCity, selectedCategory, openCityModal } = useCity();
   // const { cartCount, toggleCart } = useCart(); // Removed
   
   const navLinks = [
@@ -50,8 +52,27 @@ const Navbar: React.FC = () => {
           </div>
 
           {/* Desktop Actions */}
-          <div className="hidden md:flex items-center space-x-6">
-             {/* Cart Removed */}
+          <div className="hidden md:flex items-center space-x-4">
+             {/* City Switcher Pill */}
+             <button
+               type="button"
+               onClick={openCityModal}
+               className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-50/80 hover:bg-red-100 text-slate-800 border border-red-200/70 transition-all text-xs font-bold shadow-sm hover:shadow active:scale-95 group cursor-pointer"
+               title="Change your delivery city"
+             >
+               <MapPin size={14} className="text-primary group-hover:animate-bounce" />
+               <span className="text-slate-800 font-extrabold max-w-[120px] truncate">
+                 {selectedCity || "Select City"}
+               </span>
+               {selectedCategory && (
+                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider ${
+                   selectedCategory === 'local' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                 }`}>
+                   {selectedCategory === 'local' ? 'Local' : 'Far'}
+                 </span>
+               )}
+               <ChevronDown size={12} className="text-slate-400 group-hover:text-primary transition-colors" />
+             </button>
 
              {user ? (
                role === 'admin' ? (
@@ -90,7 +111,30 @@ const Navbar: React.FC = () => {
       {/* Mobile Menu */}
       {isOpen && (
         <div className="md:hidden absolute top-16 left-0 w-full bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-xl animate-fade-in z-40">
-          <div className="px-4 pt-2 pb-6 space-y-2">
+          <div className="px-4 pt-3 pb-6 space-y-2">
+            {/* Mobile City Selector */}
+            <div className="pb-2 border-b border-gray-100 mb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  openCityModal();
+                }}
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-red-50 text-slate-800 border border-red-200/80 font-bold text-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <MapPin size={16} className="text-primary" />
+                  <span>Delivering to: <strong className="text-primary">{selectedCity || "Select City"}</strong></span>
+                </div>
+                {selectedCategory && (
+                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${
+                    selectedCategory === 'local' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {selectedCategory === 'local' ? 'Local' : 'Far'}
+                  </span>
+                )}
+              </button>
+            </div>
             {allNavLinks.map((link) => (
               <Link
                 key={link.name}

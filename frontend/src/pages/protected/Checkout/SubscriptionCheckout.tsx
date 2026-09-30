@@ -5,8 +5,9 @@ import { Check, ShieldCheck, MapPin, AlertCircle, CreditCard, DollarSign, AlertT
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { ENV } from '../../../config/env.config';
-import LocationPicker from '../../../components/common/LocationPicker';
+import LocationPicker, { SelectedLocationData } from '../../../components/common/LocationPicker';
 import { useCity } from '../../../context/CityContext';
+import { matchAddressToAdminCities } from '../../../utils/cityMatcher';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
@@ -17,9 +18,13 @@ const SubscriptionCheckout: React.FC = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { plan, address: prefilledAddress } = location.state || {};
-  const { selectedCity } = useCity();
+  const { selectedCity, selectedCategory, selectCity, cityCategories } = useCity();
 
+  const [currentPlan, setCurrentPlan] = useState(plan);
   const [loading, setLoading] = useState(false);
+  const [customQuoteLoading, setCustomQuoteLoading] = useState(false);
+  const [customQuoteError, setCustomQuoteError] = useState('');
+  const [pricingRefreshTick, setPricingRefreshTick] = useState(0);
   const [error, setError] = useState('');
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [address, setAddress] = useState(prefilledAddress || '');
@@ -99,24 +104,101 @@ const SubscriptionCheckout: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    const fetchDeliverySettings = async () => {
+    setCurrentPlan(plan);
+  }, [plan]);
+
+  // Synchronize plan prices and delivery fee settings whenever selectedCity changes
+  useEffect(() => {
+    const fetchPlanAndDeliverySettings = async () => {
       try {
         const res = await axios.get(`${ENV.API_URL}/menu/plans`, {
           params: { city: selectedCity }
         });
-        if (res.data.success && res.data.data.deliveryFeeSettings) {
-          setDeliverySettings(res.data.data.deliveryFeeSettings);
+        if (res.data.success) {
+          if (res.data.data.deliveryFeeSettings) {
+            setDeliverySettings(res.data.data.deliveryFeeSettings);
+          }
+          if (res.data.data.plans && currentPlan) {
+            const planKey = (currentPlan.key || currentPlan.name?.toLowerCase() || '').trim();
+            const updatedTierPlan = res.data.data.plans[planKey];
+            if (updatedTierPlan && !currentPlan.customDetails?.isCustomPlan) {
+              setCurrentPlan((prev: typeof plan) => ({
+                ...prev,
+                price: updatedTierPlan.price
+              }));
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to fetch delivery settings:", err);
       }
     };
-    fetchDeliverySettings();
+    fetchPlanAndDeliverySettings();
   }, [selectedCity]);
 
+  useEffect(() => {
+    if (!plan?.customDetails?.isCustomPlan) return;
+    const timer = window.setInterval(() => setPricingRefreshTick((tick) => tick + 1), 30000);
+    return () => window.clearInterval(timer);
+  }, [plan]);
+
+  // Custom plans are always re-quoted by the server. This keeps admin pricing,
+  // city changes, and delivery-day changes synchronized with checkout.
+  useEffect(() => {
+    if (!plan?.customDetails?.isCustomPlan || isOneTime || selectedDays.length === 0) {
+      setCustomQuoteError('');
+      return;
+    }
+    const controller = new AbortController();
+    const selections = plan.customDetails.selections || {
+      roti: plan.customDetails.roti,
+      sabji: plan.customDetails.sabji ?? plan.customDetails.sabziChoices,
+      dal: plan.customDetails.dal ?? 0,
+      rice: plan.customDetails.rice ?? 0,
+      raitaFrequency: plan.customDetails.raitaFrequency ?? plan.customDetails.raitaOption,
+      saladFrequency: plan.customDetails.saladFrequency ?? 'none',
+      sweetDishFrequency: plan.customDetails.sweetDishFrequency ?? plan.customDetails.dessertOption,
+      saturdaySpecial: Boolean(plan.customDetails.saturdaySpecial)
+    };
+    setCustomQuoteLoading(true);
+    setCustomQuoteError('');
+    axios.post(`${ENV.API_URL}/menu/custom-plan/quote`, {
+      basePlan: plan.customDetails.basePlan,
+      selections,
+      deliveryDays: selectedDays,
+      city: selectedCity
+    }, { signal: controller.signal }).then((res) => {
+      const quote = res.data?.data?.quote || res.data?.data;
+      if (!quote || !Number.isFinite(Number(quote.customizedSubtotal))) throw new Error('Invalid quote response');
+      setCurrentPlan((prev: typeof plan) => ({
+        ...prev,
+        price: Number(quote.customizedSubtotal),
+        customDetails: { ...prev.customDetails, selections: quote.selectedComponents || selections, pricingVersion: quote.pricingVersion, quote }
+      }));
+      setAppliedCoupon(null);
+    }).catch((err) => {
+      if (!axios.isCancel(err)) setCustomQuoteError(axios.isAxiosError(err) ? err.response?.data?.message || 'Unable to update custom plan pricing.' : 'Unable to update custom plan pricing.');
+    }).finally(() => { if (!controller.signal.aborted) setCustomQuoteLoading(false); });
+    return () => controller.abort();
+  }, [plan, selectedCity, selectedDays, isOneTime, pricingRefreshTick]);
+
+  // Address validation against dynamic admin city categories
+  const addressMatch = address ? matchAddressToAdminCities(address, cityCategories) : null;
+  const isAddressMismatch = Boolean(
+    address && addressMatch?.eligible && addressMatch?.categoryKey && selectedCategory && addressMatch.categoryKey !== selectedCategory
+  );
+  const isAddressUnsupported = Boolean(address && address.trim().length > 5 && !addressMatch?.eligible);
+
+  const handleSyncCityAndPrice = () => {
+    if (!addressMatch?.city) return;
+    selectCity(addressMatch.city);
+    toast.success(`Switched delivery city to ${addressMatch.city}. Pricing updated.`);
+  };
+
   const getAdjustedPrice = () => {
-    const basePrice = plan?.price || 0;
+    const basePrice = currentPlan?.price || 0;
     if (isOneTime) return basePrice;
+    if (currentPlan?.customDetails?.isCustomPlan) return basePrice;
     const adjusted = (basePrice * selectedDays.length) / 6;
     return Math.round(adjusted * 100) / 100;
   };
@@ -262,6 +344,21 @@ const SubscriptionCheckout: React.FC = () => {
       return;
     }
 
+    if (currentPlan?.customDetails?.isCustomPlan && (customQuoteLoading || customQuoteError)) {
+      setError(customQuoteError || 'Please wait while your custom plan price is updated.');
+      return;
+    }
+
+    if (isAddressUnsupported) {
+      setError("Delivery is not available to this address. Please choose an address within our supported cities.");
+      return;
+    }
+
+    if (isAddressMismatch) {
+      setError(`Your delivery address is in ${addressMatch?.city} (${addressMatch?.categoryName}). Please click 'Switch to ${addressMatch?.city} & Update Pricing' to continue.`);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -271,12 +368,40 @@ const SubscriptionCheckout: React.FC = () => {
       const token = await user.getIdToken();
 
       const customDetailsPayload = isOneTime 
-        ? (plan.customDetails || undefined) 
+        ? (currentPlan.customDetails || undefined)
         : {
-            ...(plan.customDetails || {}),
+            ...(currentPlan.customDetails || {}),
             deliveryDays: selectedDays,
-            basePlan: plan.customDetails?.basePlan || plan.name
+            basePlan: currentPlan.customDetails?.basePlan || currentPlan.name
           };
+
+      if (!isOneTime && currentPlan.customDetails?.isCustomPlan) {
+        const liveQuoteResponse = await axios.post(`${ENV.API_URL}/menu/custom-plan/quote`, {
+          basePlan: customDetailsPayload.basePlan,
+          selections: customDetailsPayload.selections || customDetailsPayload,
+          deliveryDays: selectedDays,
+          city: selectedCity,
+        });
+        const liveQuote = liveQuoteResponse.data?.data?.quote || liveQuoteResponse.data?.data;
+        const liveSubtotal = Number(liveQuote?.customizedSubtotal);
+        if (!Number.isFinite(liveSubtotal)) throw new Error('Unable to verify the latest custom plan price.');
+        if (Math.abs(liveSubtotal - getAdjustedPrice()) >= 0.01) {
+          setCurrentPlan((prev: typeof plan) => ({
+            ...prev,
+            price: liveSubtotal,
+            customDetails: {
+              ...prev.customDetails,
+              selections: liveQuote.selectedComponents || customDetailsPayload.selections,
+              pricingVersion: liveQuote.pricingVersion,
+              quote: liveQuote,
+            },
+          }));
+          setAppliedCoupon(null);
+          setError('Pricing was updated by our team. Please review the new total and submit again.');
+          setLoading(false);
+          return;
+        }
+      }
 
       // Auto-sync phone number to user profile
       await axios.put(
@@ -290,14 +415,14 @@ const SubscriptionCheckout: React.FC = () => {
           `${ENV.API_URL}/payments/create-checkout-session`,
           {
             type: isOneTime ? 'one-time' : 'subscription',
-            planName: plan.name,
+            planName: currentPlan.name,
             amount: getAdjustedPrice(),
             deliveryAddress: address,
             city: selectedCity,
             couponCode: appliedCoupon ? appliedCoupon.code : undefined,
             isRecurring: isOneTime ? false : isRecurring,
             customDetails: customDetailsPayload,
-            items: [{ name: plan.name, quantity: 1, price: getAdjustedPrice() }],
+            items: [{ name: currentPlan.name, quantity: 1, price: getAdjustedPrice() }],
             replacePlan: chosenReplacePlan,
             deliveryFee,
             customerPhone: customerPhone.trim(),
@@ -320,8 +445,8 @@ const SubscriptionCheckout: React.FC = () => {
             `${ENV.API_URL}/orders`,
             {
               orderType: 'one-time',
-              items: [{ name: plan.name, quantity: 1, price: plan.price }],
-              price: plan.price,
+              items: [{ name: currentPlan.name, quantity: 1, price: currentPlan.price }],
+              price: currentPlan.price,
               deliveryAddress: address,
               city: selectedCity,
               paymentMethod: 'Cash on Delivery',
@@ -347,9 +472,9 @@ const SubscriptionCheckout: React.FC = () => {
           const response = await axios.post(
             `${ENV.API_URL}/subscriptions`,
             {
-              plan: plan.name,
+              plan: currentPlan.name,
               planDetails: {
-                ...plan,
+                ...currentPlan,
                 price: getAdjustedPrice()
               },
               durationMonths: 1,
@@ -651,10 +776,70 @@ const SubscriptionCheckout: React.FC = () => {
                   </div>
                   <button 
                     onClick={() => setIsLocationPickerOpen(true)}
-                    className="shrink-0 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs sm:text-sm font-bold rounded-xl transition"
+                    className="shrink-0 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer"
                   >
                     Change Map Pin
                   </button>
+                </div>
+              )}
+
+              {/* Address Verification Feedback & Pricing Mismatch Banner */}
+              {address && addressMatch && (
+                <div className="mt-3.5 space-y-2">
+                  {isAddressUnsupported ? (
+                    <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-900 animate-in fade-in">
+                      <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-xs">
+                        <strong className="block text-red-800 uppercase tracking-wider text-[11px] font-black">
+                          Delivery Unavailable For This Address
+                        </strong>
+                        <p className="mt-0.5 leading-relaxed text-red-700">
+                          {addressMatch.error || 'This address is outside our delivery zones. Ghar Ki Rasoee only delivers to configured cities in British Columbia.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsLocationPickerOpen(true)}
+                          className="mt-2 text-xs font-bold text-red-700 hover:text-red-900 underline cursor-pointer"
+                        >
+                          Select a different address on map
+                        </button>
+                      </div>
+                    </div>
+                  ) : isAddressMismatch ? (
+                    <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in">
+                      <div className="flex items-start gap-2.5 flex-1">
+                        <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-amber-900">
+                            Pricing Tier &amp; Delivery City Mismatch
+                          </h4>
+                          <p className="text-xs mt-0.5 leading-relaxed text-amber-800">
+                            Your delivery address is in <strong>{addressMatch.city}</strong> ({addressMatch.categoryName}), but your plan was selected for <strong>{selectedCity}</strong> ({cityCategories[selectedCategory || 'local']?.name || 'Local Cities'}).
+                          </p>
+                          <p className="text-[11px] text-amber-700 mt-1 font-semibold">
+                            Please update your selected city to apply the correct subscription price and delivery rules.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSyncCityAndPrice}
+                        className="shrink-0 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Switch to {addressMatch.city} &amp; Update Pricing</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800 font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        <Check size={14} className="text-emerald-600" />
+                        <span>Address verified: Delivering to {addressMatch.city}</span>
+                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-200/60 rounded-full">
+                        {addressMatch.categoryName}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -935,6 +1120,13 @@ const SubscriptionCheckout: React.FC = () => {
                 </div>
               )}
 
+              {currentPlan?.customDetails?.isCustomPlan && (customQuoteLoading || customQuoteError) && (
+                <div className={`p-4 border text-sm rounded-xl flex items-center gap-2 ${customQuoteError ? 'bg-red-50 border-red-200 text-red-600' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                  {customQuoteLoading ? <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+                  <span>{customQuoteLoading ? 'Updating your custom plan price…' : customQuoteError}</span>
+                </div>
+              )}
+
               {paymentMethod === 'Stripe' ? (
                 <div className="bg-blue-50/50 border border-blue-200/60 p-4 rounded-2xl text-sm text-blue-800 flex gap-3">
                   <ShieldCheck className="shrink-0 text-blue-600 mt-0.5" size={20} />
@@ -973,11 +1165,15 @@ const SubscriptionCheckout: React.FC = () => {
 
               <button 
                 type="submit"
-                disabled={loading || !address || !termsAccepted}
-                className="w-full bg-primary text-white py-4 rounded-2xl font-bold hover:bg-primary-hover transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center shadow-lg shadow-primary/20 hover:-translate-y-0.5"
+                disabled={loading || customQuoteLoading || !!customQuoteError || !address || !termsAccepted || isAddressMismatch || isAddressUnsupported}
+                className="w-full bg-primary text-white py-4 rounded-2xl font-bold hover:bg-primary-hover transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center shadow-lg shadow-primary/20 hover:-translate-y-0.5 cursor-pointer"
               >
                 {loading ? (
                   <span className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : isAddressMismatch ? (
+                  `Resolve City Mismatch to Proceed`
+                ) : isAddressUnsupported ? (
+                  `Address Outside Delivery Area`
                 ) : isOneTime ? (
                   paymentMethod === 'Stripe'
                     ? `Pay $${totalAmount.toFixed(2)} CAD`
@@ -996,7 +1192,12 @@ const SubscriptionCheckout: React.FC = () => {
       <LocationPicker 
         isOpen={isLocationPickerOpen}
         onClose={() => setIsLocationPickerOpen(false)}
-        onSelect={(loc) => setAddress(loc.address)}
+        onSelect={(loc: SelectedLocationData) => {
+          setAddress(loc.address);
+          if (loc.detectedCity) {
+            selectCity(loc.detectedCity);
+          }
+        }}
       />
 
       {/* Warning Modal */}

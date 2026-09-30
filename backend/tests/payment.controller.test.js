@@ -60,6 +60,7 @@ jest.mock("../src/models/notification.model", () => ({
 jest.mock("../src/models/menu.model", () => ({
   getMenuConfig: jest.fn(),
   calculateCustomPrice: jest.fn(),
+  quoteCustomPlan: jest.fn(),
   getCityCategory: jest.fn((city) => (city && city.toLowerCase() === "toronto" ? "far" : "local")),
   getCityFromAddress: jest.fn((addr) => {
     if (!addr) return null;
@@ -171,10 +172,17 @@ describe("PaymentController", () => {
       expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "Custom details are required for custom plan");
     });
 
-    it("should fail custom plan checkout if pricing validation fails", async () => {
+    it("should override a forged custom plan amount with the authoritative quote", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({});
-      MenuModel.calculateCustomPrice.mockReturnValue(160); // Expected 160 but we send 150
+      MenuModel.quoteCustomPlan.mockReturnValue({
+        pricingVersion: 2, basePlan: "scratch", basePackagePrice: 100,
+        removalTotal: 0, additionTotal: 60, fullScheduleSubtotal: 160,
+        deliveryDayFactor: 1, customizedSubtotal: 160, selectedComponents: { roti: 3 },
+        deliveryDays: ["monday"], pricingAdjustments: [],
+      });
+      StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-authoritative", url: "https://stripe.com/checkout" });
+      mockGet.mockResolvedValue({ exists: false });
 
       req.body = {
         amount: 150,
@@ -185,17 +193,14 @@ describe("PaymentController", () => {
       };
 
       await PaymentController.createCheckoutSession(req, res);
-      expect(ResponseUtil.error).toHaveBeenCalledWith(
-        res,
-        400,
-        "Pricing validation failed. Expected: $160.00, Received: $150.00"
-      );
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(StripeService.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ amount: 160, basePrice: 160 }));
     });
 
     it("should handle custom price validation error throw", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({});
-      MenuModel.calculateCustomPrice.mockImplementation(() => {
+      MenuModel.quoteCustomPlan.mockImplementation(() => {
         throw new Error("Invalid items structure");
       });
 
@@ -408,7 +413,7 @@ describe("PaymentController", () => {
       expect(StripeService.createCheckoutSession).toHaveBeenCalled();
     });
 
-    it("should fail standard plan checkout if pricing validation fails", async () => {
+    it("should override a forged standard plan amount with the configured price", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({
         plans: {
@@ -422,9 +427,37 @@ describe("PaymentController", () => {
         planName: "Standard",
         type: "subscription",
       };
+      StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-standard", url: "https://stripe.com/checkout" });
+      mockGet.mockResolvedValue({ exists: false });
 
       await PaymentController.createCheckoutSession(req, res);
-      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, expect.stringContaining("Pricing validation failed"));
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(StripeService.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ amount: 190, basePrice: 190 }));
+    });
+
+    it("should prorate a standard schedule without converting it to a custom plan", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({ plans: { standard: { price: 190 } } });
+      MenuModel.quoteCustomPlan.mockReturnValue({ customizedSubtotal: 95 });
+      StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-scheduled", url: "https://stripe.com/checkout" });
+
+      req.body = {
+        amount: 1,
+        deliveryAddress: "123 Main St",
+        planName: "Standard",
+        type: "subscription",
+        customDetails: { deliveryDays: ["monday", "wednesday", "friday"], basePlan: "Standard" },
+      };
+
+      await PaymentController.createCheckoutSession(req, res);
+
+      expect(MenuModel.getMenuConfig).toHaveBeenCalledWith(true);
+      expect(MenuModel.quoteCustomPlan).toHaveBeenCalledWith(expect.objectContaining({ basePlan: "standard" }), expect.any(Object), null);
+      expect(StripeService.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({
+        amount: 95,
+        pricingSnapshot: null,
+        customDetails: expect.not.objectContaining({ isCustomPlan: true }),
+      }));
     });
 
     it("should validate standard plan price using city override if present", async () => {
@@ -461,9 +494,15 @@ describe("PaymentController", () => {
     it("should successfully create session for custom plan when pricing validation succeeds", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({ some: "config" });
-      MenuModel.calculateCustomPrice.mockReturnValue(190);
+      MenuModel.quoteCustomPlan.mockReturnValue({
+        pricingVersion: 2, basePlan: "scratch", basePackagePrice: 100,
+        removalTotal: 0, additionTotal: 90, fullScheduleSubtotal: 190,
+        deliveryDayFactor: 1, customizedSubtotal: 190, selectedComponents: {},
+        deliveryDays: ["monday"], pricingAdjustments: [],
+      });
 
       StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-custom", url: "https://stripe.com/checkout" });
+      mockGet.mockResolvedValue({ exists: false });
 
       req.body = {
         amount: 190.02, // within 0.05 margin of 190

@@ -6,14 +6,17 @@ import axios from 'axios';
 import { ENV } from '../../../config/env.config';
 import PageContainer from '../../../components/layout/PageContainer';
 import { MapPin, CreditCard, Map as MapIcon, Truck, Info, Phone } from 'lucide-react';
-import LocationPicker from '../../../components/common/LocationPicker';
+import LocationPicker, { SelectedLocationData } from '../../../components/common/LocationPicker';
 import { getNextDeliverySchedule } from '../../../utils/deliverySchedule';
 import { useCity } from '../../../context/CityContext';
+import { matchAddressToAdminCities } from '../../../utils/cityMatcher';
+import { AlertTriangle, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Checkout: React.FC = () => {
   const { items, cartTotal, clearCart } = useCart();
   const { user } = useAuth();
-  const { selectedCity } = useCity();
+  const { selectedCity, selectedCategory, selectCity, cityCategories } = useCity();
   const navigate = useNavigate();
   
   const deliverySchedule = getNextDeliverySchedule();
@@ -100,9 +103,24 @@ const Checkout: React.FC = () => {
     );
   }
 
-  const handleLocationSelect = (location: { address: string; lat: number; lng: number }) => {
-      setAddress(location.address);
-      // We could also store lat/lng if needed for backend, but address is sufficient for now.
+  // Address validation against dynamic admin city categories
+  const addressMatch = address ? matchAddressToAdminCities(address, cityCategories) : null;
+  const isAddressMismatch = Boolean(
+    address && addressMatch?.eligible && addressMatch?.categoryKey && selectedCategory && addressMatch.categoryKey !== selectedCategory
+  );
+  const isAddressUnsupported = Boolean(address && address.trim().length > 5 && !addressMatch?.eligible);
+
+  const handleSyncCity = () => {
+    if (!addressMatch?.city) return;
+    selectCity(addressMatch.city);
+    toast.success(`Switched delivery city to ${addressMatch.city}.`);
+  };
+
+  const handleLocationSelect = (location: SelectedLocationData) => {
+    setAddress(location.address);
+    if (location.detectedCity) {
+      selectCity(location.detectedCity);
+    }
   };
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
@@ -116,6 +134,12 @@ const Checkout: React.FC = () => {
       }
       if (!address) {
          throw new Error('Please enter a delivery address.');
+      }
+      if (isAddressUnsupported) {
+         throw new Error('Delivery is not available to this address. Please choose a supported delivery location.');
+      }
+      if (isAddressMismatch) {
+         throw new Error(`Your delivery address is in ${addressMatch?.city} (${addressMatch?.categoryName}). Please click 'Switch to ${addressMatch?.city}' to continue.`);
       }
       if (!customerPhone || customerPhone.trim().replace(/\D/g, '').length < 7) {
          throw new Error('Please enter a valid contact phone number.');
@@ -148,6 +172,7 @@ const Checkout: React.FC = () => {
             type: 'one-time',
             amount: cartTotal,
             deliveryAddress: address,
+            city: selectedCity,
             deliveryDate: date,
             items: orderItems,
             customerPhone,
@@ -274,6 +299,56 @@ const Checkout: React.FC = () => {
                          </div>
                      </div>
                  )}
+
+                  {/* Address Verification Feedback & Pricing Mismatch Banner */}
+                  {address && addressMatch && (
+                    <div className="mt-3.5 space-y-2">
+                      {isAddressUnsupported ? (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-red-900 animate-in fade-in">
+                          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                          <div className="flex-1 text-xs">
+                            <strong className="block text-red-800 uppercase tracking-wider text-[11px] font-black">
+                              Delivery Unavailable For This Address
+                            </strong>
+                            <p className="mt-0.5 leading-relaxed text-red-700">
+                              {addressMatch.error || 'This address is outside our delivery zones. Ghar Ki Rasoee only delivers to configured cities in British Columbia.'}
+                            </p>
+                          </div>
+                        </div>
+                      ) : isAddressMismatch ? (
+                        <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in">
+                          <div className="flex items-start gap-2 flex-1 text-xs">
+                            <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <strong className="block text-amber-900 uppercase tracking-wider text-[11px] font-black">
+                                Delivery City Mismatch
+                              </strong>
+                              <p className="mt-0.5 leading-relaxed text-amber-800">
+                                Address is in <strong>{addressMatch.city}</strong> ({addressMatch.categoryName}), but active city is <strong>{selectedCity}</strong> ({cityCategories[selectedCategory || 'local']?.name || 'Local Cities'}).
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleSyncCity}
+                            className="shrink-0 px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow transition cursor-pointer"
+                          >
+                            Switch to {addressMatch.city}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs text-emerald-800 font-semibold">
+                          <span className="flex items-center gap-1.5">
+                            <Check size={14} className="text-emerald-600" />
+                            <span>Address verified: Delivering to {addressMatch.city}</span>
+                          </span>
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-200/60 rounded-full">
+                            {addressMatch.categoryName}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                </div>
 
                <LocationPicker 
@@ -413,11 +488,15 @@ const Checkout: React.FC = () => {
 
                  <button 
                    type="submit"
-                   disabled={loading || !termsAccepted}
-                   className="w-full bg-primary text-white py-3.5 rounded-xl font-bold text-base hover:bg-primary-hover transition shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+                   disabled={loading || !termsAccepted || isAddressMismatch || isAddressUnsupported}
+                   className="w-full bg-primary text-white py-3.5 rounded-xl font-bold text-base hover:bg-primary-hover transition shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center cursor-pointer"
                  >
                    {loading ? (
                      <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                   ) : isAddressMismatch ? (
+                     `Resolve City Mismatch to Order`
+                   ) : isAddressUnsupported ? (
+                     `Address Outside Delivery Area`
                    ) : (
                      `Pay $${finalTotal.toFixed(2)} CAD & Place Order`
                    )}

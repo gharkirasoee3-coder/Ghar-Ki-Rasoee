@@ -14,6 +14,24 @@ interface PlanConfig {
 }
 
 interface CustomPricingRules {
+  pricingVersion?: number;
+  removal?: {
+    roti: number;
+    raita: { threePerWeek: number; daily: number };
+    sweetDish: { twicePerWeek: number };
+    saturdaySpecial: number;
+    sabji: number;
+    dal: number;
+    rice: number;
+  };
+  addition?: {
+    roti: number;
+    raita: { threePerWeek: number; daily: number };
+    salad: { threePerWeek: number; daily: number };
+    sabji: number;
+    dal: number;
+    rice: number;
+  };
   basePrice: number;
   pricePerRoti: number;
   pricePerRice: number;
@@ -32,6 +50,8 @@ interface CustomPricingRules {
   oneTimeRaitaPrice?: number;
   oneTimeDessertPrice?: number;
 }
+
+type AdjustmentRateTree = Record<string, number | Record<string, number>>;
 
 interface MenuItem {
   sabziOptions?: string[];
@@ -200,7 +220,7 @@ const AdminMenu: React.FC = () => {
     setConfig(updated);
   };
 
-  const updatePricingRule = (key: keyof CustomPricingRules, value: number) => {
+  const updatePricingRule = (key: Exclude<keyof CustomPricingRules, 'removal' | 'addition'>, value: number) => {
     if (!config) return;
     const updated = { ...config };
     if (!updated.customPricingConfig) {
@@ -225,6 +245,26 @@ const AdminMenu: React.FC = () => {
     }
     updated.customPricingConfig[key] = value;
     setConfig(updated);
+  };
+
+  const updateAdjustmentRate = (side: 'removal' | 'addition', path: string[], value: number) => {
+    if (!config || !Number.isFinite(value) || value < 0) return;
+    const defaults: AdjustmentRateTree = side === 'removal'
+      ? { roti: 5, raita: { threePerWeek: 10, daily: 20 }, sweetDish: { twicePerWeek: 10 }, saturdaySpecial: 15, sabji: 50, dal: 50, rice: 40 }
+      : { roti: 8, raita: { threePerWeek: 15, daily: 30 }, salad: { threePerWeek: 15, daily: 30 }, sabji: 55, dal: 55, rice: 40 };
+    setConfig(prev => {
+      if (!prev) return prev;
+      const currentSide: AdjustmentRateTree = { ...defaults, ...(prev.customPricingConfig?.[side] || {}) };
+      if (path.length === 1) currentSide[path[0]] = value;
+      else {
+        const nested = currentSide[path[0]];
+        currentSide[path[0]] = {
+          ...(typeof nested === 'object' ? nested : {}),
+          [path[1]]: value,
+        };
+      }
+      return { ...prev, customPricingConfig: { ...prev.customPricingConfig, pricingVersion: 2, [side]: currentSide } };
+    });
   };
 
   const updateDeliverySetting = (key: 'minAmountForFreeDelivery' | 'deliveryFee', value: number) => {
@@ -1271,7 +1311,48 @@ const AdminMenu: React.FC = () => {
                 </div>
               </div>
 
-              {/* Card 2: Monthly Custom Plan: Core Parameters */}
+              {/* Dynamic asymmetric subscription adjustments */}
+              <div className="sm:col-span-2 p-5 sm:p-6 rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50/50 to-white space-y-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-200 pb-3">
+                  <div>
+                    <h4 className="text-sm font-black text-indigo-950 uppercase tracking-wide">Custom Plan Price Adjustments</h4>
+                    <p className="text-[11px] text-slate-500 mt-1">Saved rates are used immediately by customer quotes and checkout.</p>
+                  </div>
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800">PRICING V2</span>
+                </div>
+                <div className="grid lg:grid-cols-2 gap-5">
+                  <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
+                    <h5 className="font-extrabold text-emerald-900 mb-1">Item Removal — Price Deduction</h5>
+                    <p className="text-[10px] text-emerald-800 mb-4">Subtracted when an included item is removed.</p>
+                    <div className="grid sm:grid-cols-2 gap-3">{[
+                      {label:'Roti · 1',path:['roti'],value:config.customPricingConfig?.removal?.roti??5},
+                      {label:'Raita · 3 times/week',path:['raita','threePerWeek'],value:config.customPricingConfig?.removal?.raita?.threePerWeek??10},
+                      {label:'Raita · Daily',path:['raita','daily'],value:config.customPricingConfig?.removal?.raita?.daily??20},
+                      {label:'Sweet Dish · 2 times/week',path:['sweetDish','twicePerWeek'],value:config.customPricingConfig?.removal?.sweetDish?.twicePerWeek??10},
+                      {label:'Saturday Special · 1',path:['saturdaySpecial'],value:config.customPricingConfig?.removal?.saturdaySpecial??15},
+                      {label:'Sabji · 1',path:['sabji'],value:config.customPricingConfig?.removal?.sabji??50},
+                      {label:'Dal · 1',path:['dal'],value:config.customPricingConfig?.removal?.dal??50},
+                      {label:'Rice · 1',path:['rice'],value:config.customPricingConfig?.removal?.rice??40}
+                    ].map(rate=><label key={rate.label} className="text-[10px] font-bold text-slate-600"><span className="block mb-1">{rate.label}</span><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" min="0" step="0.01" value={rate.value} onChange={e=>updateAdjustmentRate('removal',rate.path,Number(e.target.value))} className="w-full border border-emerald-200 rounded-xl py-2 pl-7 pr-3 bg-white font-bold"/></div></label>)}</div>
+                  </section>
+                  <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
+                    <h5 className="font-extrabold text-blue-900 mb-1">Item Addition — Extra Charge</h5>
+                    <p className="text-[10px] text-blue-800 mb-4">Added when an item is selected above the package inclusion.</p>
+                    <div className="grid sm:grid-cols-2 gap-3">{[
+                      {label:'Roti · 1',path:['roti'],value:config.customPricingConfig?.addition?.roti??8},
+                      {label:'Raita · 3 times/week',path:['raita','threePerWeek'],value:config.customPricingConfig?.addition?.raita?.threePerWeek??15},
+                      {label:'Raita · Daily',path:['raita','daily'],value:config.customPricingConfig?.addition?.raita?.daily??30},
+                      {label:'Salad · 3 times/week',path:['salad','threePerWeek'],value:config.customPricingConfig?.addition?.salad?.threePerWeek??15},
+                      {label:'Salad · Daily',path:['salad','daily'],value:config.customPricingConfig?.addition?.salad?.daily??30},
+                      {label:'Sabji · 1',path:['sabji'],value:config.customPricingConfig?.addition?.sabji??55},
+                      {label:'Dal · 1',path:['dal'],value:config.customPricingConfig?.addition?.dal??55},
+                      {label:'Rice · 1',path:['rice'],value:config.customPricingConfig?.addition?.rice??40}
+                    ].map(rate=><label key={rate.label} className="text-[10px] font-bold text-slate-600"><span className="block mb-1">{rate.label}</span><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" min="0" step="0.01" value={rate.value} onChange={e=>updateAdjustmentRate('addition',rate.path,Number(e.target.value))} className="w-full border border-blue-200 rounded-xl py-2 pl-7 pr-3 bg-white font-bold"/></div></label>)}</div>
+                  </section>
+                </div>
+              </div>
+
+              {/* Card 2: Legacy monthly custom plan parameters */}
               <div className="p-5 sm:p-6 rounded-3xl border border-blue-200/80 bg-gradient-to-br from-blue-50/40 via-indigo-50/15 to-white space-y-4 shadow-sm shadow-blue-100/30 hover:border-blue-300 transition-all">
                 <div className="flex items-center justify-between border-b border-blue-200/70 pb-3">
                   <h4 className="text-xs font-black text-blue-950 uppercase tracking-wide border-l-2 border-primary pl-2">
@@ -1490,4 +1571,3 @@ const AdminMenu: React.FC = () => {
 };
 
 export default AdminMenu;
-

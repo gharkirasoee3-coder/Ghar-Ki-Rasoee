@@ -118,6 +118,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          plans: { basic: { price: 100 } },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
         }),
       });
@@ -145,6 +146,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          plans: { premium: { price: 200 } },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
         }),
       });
@@ -362,6 +364,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          plans: { basic: { price: 100 } },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
         }),
       });
@@ -451,10 +454,12 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       mockGet.mockResolvedValue({
         exists: true,
         data: () => ({
+          plans: { basic: { price: 120 } },
           deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
           cityCategories: {
             far: {
               deliveryFeeSettings: { minAmountForFreeDelivery: 200, deliveryFee: 25 },
+              planPrices: { basic: 120 },
             },
           },
         }),

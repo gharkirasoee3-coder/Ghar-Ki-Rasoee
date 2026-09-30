@@ -12,6 +12,8 @@ router.get("/plans/:planType/menu/:day", MenuController.getDayMenu);
 router.get("/saturday-specials", MenuController.getSaturdaySpecials);
 router.get("/service-info", MenuController.getServiceInfo);
 router.get("/menu-images", MenuController.getMenuImages);
+router.get("/supported-cities", MenuController.getSupportedCities);
+router.post("/custom-plan/quote", MenuController.quoteCustomPlan);
 
 // Protected customization routes
 router.post(

@@ -44,6 +44,7 @@ jest.mock("../src/models/customization.model", () => ({
 jest.mock("../src/models/menu.model", () => ({
   getMenuConfig: jest.fn(),
   updateMenuConfig: jest.fn(),
+  validateMenuConfig: jest.fn(),
   getDayMenu: jest.fn(),
 }), { virtual: true });
 
@@ -1328,6 +1329,8 @@ describe("AdminController", () => {
 
   describe("updateMenuConfig", () => {
     it("should return 400 if config body invalid", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.validateMenuConfig.mockImplementation(() => { throw new Error("Invalid menu configuration data"); });
       await AdminController.updateMenuConfig(req, res);
       expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "Invalid menu configuration data");
     });
@@ -1335,6 +1338,7 @@ describe("AdminController", () => {
     it("should update config and clear delivery cache", async () => {
       req.body = { plans: {}, weeklyMenus: {} };
       const MenuModel = require("../src/models/menu.model");
+      MenuModel.validateMenuConfig.mockReturnValue(req.body);
       MenuModel.updateMenuConfig.mockResolvedValue({});
 
       await AdminController.updateMenuConfig(req, res);
@@ -1347,6 +1351,7 @@ describe("AdminController", () => {
     it("should handle error in updateMenuConfig", async () => {
       req.body = { plans: {}, weeklyMenus: {} };
       const MenuModel = require("../src/models/menu.model");
+      MenuModel.validateMenuConfig.mockReturnValue(req.body);
       MenuModel.updateMenuConfig.mockRejectedValue(new Error("Config save failed"));
 
       await AdminController.updateMenuConfig(req, res);

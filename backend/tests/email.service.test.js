@@ -202,6 +202,28 @@ describe("EmailService", () => {
       expect(result).toBe(true);
     });
 
+    it("should render canonical v2 custom-plan fields", () => {
+      const html = EmailService._formatCustomDetails({
+        custom: true,
+        basePlan: "premium",
+        roti: 8,
+        sabji: 2,
+        dal: 1,
+        rice: 1,
+        raitaFrequency: "daily",
+        saladFrequency: "threePerWeek",
+        sweetDishFrequency: "twicePerWeek",
+        saturdaySpecial: true,
+      });
+
+      expect(html).toContain("<strong>Sabji:</strong> 2");
+      expect(html).toContain("<strong>Dal:</strong> 1");
+      expect(html).toContain("<strong>Rice:</strong> 1");
+      expect(html).toContain("<strong>Raita:</strong> daily");
+      expect(html).toContain("<strong>Salad:</strong> threePerWeek");
+      expect(html).toContain("<strong>Sweet Dish:</strong> twicePerWeek");
+    });
+
     it("should handle object format for order items and empty items fallback", async () => {
       config.SMTP.USER = "test@example.com";
       config.SMTP.PASS = "testpassword";

@@ -55,7 +55,7 @@ const PlansSection: React.FC = () => {
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedCity } = useCity();
+  const { selectedCity, selectedCategory, cityCategories, openCityModal } = useCity();
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -130,6 +130,22 @@ const PlansSection: React.FC = () => {
           <p className="text-base sm:text-lg text-text-secondary max-w-2xl mx-auto leading-relaxed px-2">
             Select a plan that fits your lifestyle. Pause or cancel anytime. No hidden fees, just great food delivered to you.
           </p>
+          {selectedCity && (
+            <div className="mt-4 inline-flex items-center gap-2 bg-gray-50 border border-gray-200 px-4 py-1.5 rounded-full text-xs font-semibold text-gray-700 shadow-sm">
+              <span>Showing plans for: <strong className="text-text-primary">{selectedCity}</strong></span>
+              {selectedCategory && cityCategories[selectedCategory] && (
+                <span className="bg-red-100 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {cityCategories[selectedCategory].name || selectedCategory}
+                </span>
+              )}
+              <button 
+                onClick={openCityModal}
+                className="text-primary hover:underline font-bold ml-1"
+              >
+                Change
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto items-stretch">

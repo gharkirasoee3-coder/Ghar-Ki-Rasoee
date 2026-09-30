@@ -34,6 +34,34 @@ function getReliableStripePriceBreakdown(session) {
   };
 }
 
+function getCustomPricingSnapshot(metadata = {}) {
+  if (metadata.pricingVersion !== "2") return null;
+  try {
+    const snapshot = {
+      pricingVersion: 2,
+      basePackagePrice: Number(metadata.basePackagePrice),
+      removalTotal: Number(metadata.removalTotal),
+      additionTotal: Number(metadata.additionTotal),
+      fullScheduleSubtotal: Number(metadata.fullScheduleSubtotal),
+      deliveryDayFactor: Number(metadata.deliveryDayFactor),
+      customizedSubtotal: Number(metadata.customizedSubtotal),
+      selectedComponents: JSON.parse(metadata.selectedComponents || "{}"),
+      pricingAdjustments: JSON.parse(metadata.pricingAdjustments || "[]").map((line) => ({
+        type: line[0] === "r" ? "removal" : "addition",
+        item: line[1],
+        quantity: line[2],
+        unitAmount: line[3],
+        amount: line[4],
+        ...(line[5] ? { frequency: line[5] } : {}),
+      })),
+    };
+    const amounts = [snapshot.basePackagePrice, snapshot.removalTotal, snapshot.additionTotal, snapshot.fullScheduleSubtotal, snapshot.deliveryDayFactor, snapshot.customizedSubtotal];
+    return amounts.every(Number.isFinite) ? snapshot : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 class PaymentController {
   /**
    * Create Stripe Checkout Session for subscription or one-time payment
@@ -41,9 +69,12 @@ class PaymentController {
   static async createCheckoutSession(req, res) {
     try {
       const { uid, email } = req.user;
-      const { type, planName, amount, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan, customerPhone, notes } = req.body;
+      const { type, planName, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan, customerPhone, notes } = req.body;
+      let amount = Number(req.body.amount);
+      let pricingSnapshot = null;
+      let checkoutCustomDetails = customDetails;
 
-      if (!amount || amount <= 0) {
+      if (type !== "subscription" && (!Number.isFinite(amount) || amount <= 0)) {
         return ResponseUtil.error(res, 400, "Invalid amount");
       }
 
@@ -52,23 +83,52 @@ class PaymentController {
       }
 
       const MenuModel = require("../models/menu.model");
-      const menuConfig = (await MenuModel.getMenuConfig()) || {};
+      const menuConfig = (await MenuModel.getMenuConfig(true)) || {};
 
       // Prefer the address-derived city so a client cannot choose a cheaper fee region.
-      const city = MenuModel.getCityFromAddress(deliveryAddress, menuConfig) || req.body.city || null;
+      const addressCity = MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      const city = addressCity || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
 
+      // Validate against category mismatch if address contains a specific recognized city
+      if (addressCity && req.body.city) {
+        const reqCategoryKey = MenuModel.getCityCategory(req.body.city, menuConfig);
+        const addressCategoryKey = MenuModel.getCityCategory(addressCity, menuConfig);
+        if (reqCategoryKey && addressCategoryKey && reqCategoryKey !== addressCategoryKey) {
+          const planKey = (planName || "").toLowerCase();
+          const addrPrice = categoryConfig?.planPrices?.[planKey];
+          if (addrPrice !== undefined && Math.abs(amount - addrPrice) > 0.05) {
+            const reqCatName = menuConfig.cityCategories?.[reqCategoryKey]?.name || reqCategoryKey;
+            const addrCatName = menuConfig.cityCategories?.[addressCategoryKey]?.name || addressCategoryKey;
+            return ResponseUtil.error(
+              res,
+              400,
+              `Delivery address is in ${addressCity} (${addrCatName}), which does not match your active ${req.body.city} (${reqCatName}) pricing tier. Please update your selected delivery city to proceed.`
+            );
+          }
+        }
+      }
+
       // Backend price verification for custom subscriptions
-      if (type === "subscription" && (customDetails || (planName && planName.toLowerCase().includes("custom")))) {
+      const isCustomSubscription = type === "subscription" && (
+        customDetails?.isCustomPlan === true ||
+        customDetails?.custom === true ||
+        (planName && planName.toLowerCase().includes("custom"))
+      );
+      if (isCustomSubscription) {
         if (!customDetails) {
           return ResponseUtil.error(res, 400, "Custom details are required for custom plan");
         }
         try {
-          const calculatedPrice = MenuModel.calculateCustomPrice(customDetails, menuConfig, city);
-          if (Math.abs(amount - calculatedPrice) > 0.05) {
-            return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${calculatedPrice.toFixed(2)}, Received: $${amount.toFixed(2)}`);
-          }
+          pricingSnapshot = MenuModel.quoteCustomPlan(customDetails, menuConfig, city);
+          amount = pricingSnapshot.customizedSubtotal;
+          checkoutCustomDetails = {
+            isCustomPlan: true,
+            basePlan: pricingSnapshot.basePlan,
+            ...pricingSnapshot.selectedComponents,
+            deliveryDays: pricingSnapshot.deliveryDays,
+          };
         } catch (err) {
           return ResponseUtil.error(res, 400, err.message);
         }
@@ -76,15 +136,26 @@ class PaymentController {
         // Standard plans verification
         const planKey = planName.toLowerCase();
         const planInfo = menuConfig.plans?.[planKey];
-        if (planInfo) {
-          let expectedPrice = planInfo.price;
-          if (categoryConfig?.planPrices?.[planKey] !== undefined) {
-            expectedPrice = categoryConfig.planPrices[planKey];
-          }
-          if (Math.abs(amount - expectedPrice) > 0.05) {
-            return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${expectedPrice.toFixed(2)}, Received: $${amount.toFixed(2)}`);
-          }
+        if (!planInfo) return ResponseUtil.error(res, 400, "Invalid subscription plan");
+        let expectedPrice = planInfo.price;
+        if (categoryConfig?.planPrices?.[planKey] !== undefined) {
+          expectedPrice = categoryConfig.planPrices[planKey];
         }
+        try {
+          if (Array.isArray(customDetails?.deliveryDays)) {
+            amount = MenuModel.quoteCustomPlan({
+              basePlan: planKey,
+              deliveryDays: customDetails.deliveryDays,
+            }, menuConfig, city).customizedSubtotal;
+          } else {
+            amount = expectedPrice;
+          }
+        } catch (err) {
+          return ResponseUtil.error(res, 400, err.message);
+        }
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return ResponseUtil.error(res, 400, "Invalid amount");
       }
 
       const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
@@ -183,7 +254,8 @@ class PaymentController {
         cancelUrl,
         couponCode,
         isRecurring,
-        customDetails,
+        customDetails: checkoutCustomDetails,
+        pricingSnapshot,
         replacePlan,
         deliveryFee,
         basePrice: amount,
@@ -273,6 +345,7 @@ class PaymentController {
 
       const parsedCustomDetails = customDetails ? JSON.parse(customDetails) : null;
       const priceBreakdown = getReliableStripePriceBreakdown(session);
+      const customPricingSnapshot = getCustomPricingSnapshot(session.metadata);
 
       const isCustomPlanType = planName.toLowerCase().includes('custom') || !!parsedCustomDetails?.isCustomPlan;
       const planData = {
@@ -295,6 +368,7 @@ class PaymentController {
         customerPhone: customerPhone || null,
         notes: notes || null,
         ...(priceBreakdown || {}),
+        ...(customPricingSnapshot || {}),
       };
 
       const newSub = await SubscriptionModel.createSubscription(userId, planData);

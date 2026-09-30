@@ -33,9 +33,11 @@ class SubscriptionController {
 
       const planName = typeof plan === "object" ? (plan.name || "") : plan;
       let basePrice = planDetails?.price || planDetails || 0;
+      let pricingSnapshot = null;
+      let storedCustomDetails = customDetails;
 
       const MenuModel = require("../models/menu.model");
-      const menuConfig = (await MenuModel.getMenuConfig()) || {};
+      const menuConfig = (await MenuModel.getMenuConfig(true)) || {};
       
       const UserModel = require("../models/user.model");
       let userData = {};
@@ -49,21 +51,47 @@ class SubscriptionController {
       }
 
       // Prefer the address-derived city so a client cannot choose a cheaper fee region.
-      const city = MenuModel.getCityFromAddress(deliveryAddress, menuConfig) || req.body.city || null;
+      const addressCity = MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
+      const city = addressCity || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
 
+      // Validate against category mismatch if address contains a specific recognized city
+      if (addressCity && req.body.city) {
+        const reqCategoryKey = MenuModel.getCityCategory(req.body.city, menuConfig);
+        const addressCategoryKey = MenuModel.getCityCategory(addressCity, menuConfig);
+        if (reqCategoryKey && addressCategoryKey && reqCategoryKey !== addressCategoryKey) {
+          const planKey = (planName || "").toLowerCase();
+          const addrPrice = categoryConfig?.planPrices?.[planKey];
+          if (addrPrice !== undefined && Math.abs(basePrice - addrPrice) > 0.05) {
+            const reqCatName = menuConfig.cityCategories?.[reqCategoryKey]?.name || reqCategoryKey;
+            const addrCatName = menuConfig.cityCategories?.[addressCategoryKey]?.name || addressCategoryKey;
+            return ResponseUtil.error(
+              res,
+              400,
+              `Delivery address is in ${addressCity} (${addrCatName}), which does not match your active ${req.body.city} (${reqCatName}) pricing tier. Please update your selected delivery city to proceed.`
+            );
+          }
+        }
+      }
+
       // Backend price verification for custom subscriptions
-      if (customDetails || planName.toLowerCase().includes("custom")) {
+      const isCustomSubscription = customDetails?.isCustomPlan === true ||
+        customDetails?.custom === true ||
+        planName.toLowerCase().includes("custom");
+      if (isCustomSubscription) {
         if (!customDetails) {
           return ResponseUtil.error(res, 400, "Custom details are required for custom plan");
         }
         try {
-          const calculatedPrice = MenuModel.calculateCustomPrice(customDetails, menuConfig, city);
-          if (Math.abs(basePrice - calculatedPrice) > 0.05) {
-            return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${calculatedPrice.toFixed(2)}, Received: $${basePrice.toFixed(2)}`);
-          }
-          basePrice = calculatedPrice;
+          pricingSnapshot = MenuModel.quoteCustomPlan(customDetails, menuConfig, city);
+          basePrice = pricingSnapshot.customizedSubtotal;
+          storedCustomDetails = {
+            isCustomPlan: true,
+            basePlan: pricingSnapshot.basePlan,
+            ...pricingSnapshot.selectedComponents,
+            deliveryDays: pricingSnapshot.deliveryDays,
+          };
         } catch (err) {
           return ResponseUtil.error(res, 400, err.message);
         }
@@ -71,15 +99,22 @@ class SubscriptionController {
         // Standard plan verification
         const planKey = planName.toLowerCase();
         const planInfo = menuConfig.plans?.[planKey];
-        if (planInfo) {
-          let expectedPrice = planInfo.price;
-          if (categoryConfig?.planPrices?.[planKey] !== undefined) {
-            expectedPrice = categoryConfig.planPrices[planKey];
+        if (!planInfo) return ResponseUtil.error(res, 400, "Invalid subscription plan");
+        let expectedPrice = planInfo.price;
+        if (categoryConfig?.planPrices?.[planKey] !== undefined) {
+          expectedPrice = categoryConfig.planPrices[planKey];
+        }
+        try {
+          if (Array.isArray(customDetails?.deliveryDays)) {
+            basePrice = MenuModel.quoteCustomPlan({
+              basePlan: planKey,
+              deliveryDays: customDetails.deliveryDays,
+            }, menuConfig, city).customizedSubtotal;
+          } else {
+            basePrice = expectedPrice;
           }
-          if (Math.abs(basePrice - expectedPrice) > 0.05) {
-            return ResponseUtil.error(res, 400, `Pricing validation failed. Expected: $${expectedPrice.toFixed(2)}, Received: $${basePrice.toFixed(2)}`);
-          }
-          basePrice = expectedPrice;
+        } catch (err) {
+          return ResponseUtil.error(res, 400, err.message);
         }
       }
 
@@ -142,11 +177,11 @@ class SubscriptionController {
         existing = activeSubscriptions?.[0] || null;
       }
 
-      const isCustomPlanType = planName.toLowerCase().includes('custom') || !!customDetails?.isCustomPlan;
+      const isCustomPlanType = isCustomSubscription;
       const planData = {
         plan: planName,
         planDetails: {
-          ...(customDetails ? { ...(isCustomPlanType ? { custom: true } : {}), ...customDetails } : {}),
+          ...(storedCustomDetails ? { ...(isCustomPlanType ? { custom: true } : {}), ...storedCustomDetails } : {}),
           name: planName,
           price: priceBreakdown.totalAmount,
         },
@@ -158,6 +193,7 @@ class SubscriptionController {
         replacesSubscriptionId: existing?.subscriptionId || null,
         couponCode: couponCode || null,
         deliveryDays: customDetails?.deliveryDays || null,
+        ...(pricingSnapshot || {}),
         ...priceBreakdown,
         customerPhone: finalPhone,
         notes: notes || null,

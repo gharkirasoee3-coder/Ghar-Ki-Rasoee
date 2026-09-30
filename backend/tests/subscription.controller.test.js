@@ -64,6 +64,7 @@ jest.mock("../src/config/firebase.config", () => ({
 jest.mock("../src/models/menu.model", () => ({
   getMenuConfig: jest.fn(),
   calculateCustomPrice: jest.fn(),
+  quoteCustomPlan: jest.fn(),
   getCityCategory: jest.fn((city) => (city && city.toLowerCase() === "toronto" ? "far" : "local")),
   getCityFromAddress: jest.fn((addr) => {
     if (!addr) return null;
@@ -95,6 +96,14 @@ describe("SubscriptionController", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     spyConsoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    require("../src/models/menu.model").getMenuConfig.mockResolvedValue({
+      plans: {
+        basic: { price: 150 },
+        standard: { price: 190 },
+        premium: { price: 220 },
+      },
+      deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+    });
 
     req = {
       user: { uid: "user-123", email: "user@example.com", name: "User" },
@@ -135,10 +144,16 @@ describe("SubscriptionController", () => {
       expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "Custom details are required for custom plan");
     });
 
-    it("should validate custom price and fail if incorrect", async () => {
+    it("should replace a forged custom price with the authoritative quote", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({});
-      MenuModel.calculateCustomPrice.mockReturnValue(150);
+      MenuModel.quoteCustomPlan.mockReturnValue({
+        pricingVersion: 2, basePlan: "scratch", basePackagePrice: 100,
+        removalTotal: 0, additionTotal: 50, fullScheduleSubtotal: 150,
+        deliveryDayFactor: 1, customizedSubtotal: 150, selectedComponents: { roti: 3 },
+        deliveryDays: ["monday"], pricingAdjustments: [],
+      });
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-authoritative" });
 
       req.body = {
         plan: "Custom",
@@ -147,17 +162,14 @@ describe("SubscriptionController", () => {
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.error).toHaveBeenCalledWith(
-        res,
-        400,
-        expect.stringContaining("Pricing validation failed")
-      );
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith("user-123", expect.objectContaining({ basePrice: 150, customizedSubtotal: 150 }));
     });
 
     it("should handle custom price validation error", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({});
-      MenuModel.calculateCustomPrice.mockImplementation(() => {
+      MenuModel.quoteCustomPlan.mockImplementation(() => {
         throw new Error("Invalid custom options");
       });
 
@@ -174,7 +186,12 @@ describe("SubscriptionController", () => {
     it("should successfully validate custom price and create subscription", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({});
-      MenuModel.calculateCustomPrice.mockReturnValue(150);
+      MenuModel.quoteCustomPlan.mockReturnValue({
+        pricingVersion: 2, basePlan: "scratch", basePackagePrice: 100,
+        removalTotal: 0, additionTotal: 50, fullScheduleSubtotal: 150,
+        deliveryDayFactor: 1, customizedSubtotal: 150, selectedComponents: { roti: 3 },
+        deliveryDays: ["monday"], pricingAdjustments: [],
+      });
 
       SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-1" });
       mockUpdate.mockResolvedValue({});
@@ -190,17 +207,14 @@ describe("SubscriptionController", () => {
       expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
-    it("should fallback planName when plan.name is falsy", async () => {
-      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-1" });
-      mockUpdate.mockResolvedValue({});
-
+    it("should reject an object plan when plan.name is empty", async () => {
       req.body = {
-        plan: { name: "" }, // plan.name is falsy, will fall back to plan object
+        plan: { name: "" },
         planDetails: 190,
       };
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
+      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, "Invalid subscription plan");
     });
 
     it("should handle user address update failure gracefully during subscription", async () => {
@@ -237,7 +251,7 @@ describe("SubscriptionController", () => {
       expect(ResponseUtil.send).toHaveBeenCalledWith(res, 201, "Subscription pending admin verification", expect.any(Object));
     });
 
-    it("should fail standard plan checkout if pricing validation fails", async () => {
+    it("should override a forged standard plan price with the configured price", async () => {
       const MenuModel = require("../src/models/menu.model");
       MenuModel.getMenuConfig.mockResolvedValue({
         plans: {
@@ -249,9 +263,31 @@ describe("SubscriptionController", () => {
         plan: "Standard",
         planDetails: 100, // incorrect
       };
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-authoritative-standard" });
 
       await SubscriptionController.createSubscription(req, res);
-      expect(ResponseUtil.error).toHaveBeenCalledWith(res, 400, expect.stringContaining("Pricing validation failed"));
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith("user-123", expect.objectContaining({ basePrice: 190 }));
+    });
+
+    it("should prorate a standard schedule without persisting custom-plan markers", async () => {
+      const MenuModel = require("../src/models/menu.model");
+      MenuModel.getMenuConfig.mockResolvedValue({ plans: { standard: { price: 190 } } });
+      MenuModel.quoteCustomPlan.mockReturnValue({ customizedSubtotal: 95 });
+      SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-scheduled" });
+      req.body = {
+        plan: "Standard",
+        planDetails: 1,
+        customDetails: { deliveryDays: ["monday", "wednesday", "friday"], basePlan: "Standard" },
+      };
+
+      await SubscriptionController.createSubscription(req, res);
+
+      expect(MenuModel.getMenuConfig).toHaveBeenCalledWith(true);
+      expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith("user-123", expect.objectContaining({
+        basePrice: 95,
+        planDetails: expect.not.objectContaining({ custom: true, isCustomPlan: true }),
+      }));
     });
 
     it("should validate standard plan price using city override if present", async () => {

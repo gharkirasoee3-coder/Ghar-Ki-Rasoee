@@ -8,15 +8,24 @@ class EmailService {
    */
   static _formatCustomDetails(planDetails) {
     if (!planDetails || !planDetails.custom) return "";
+    const sabji = planDetails.sabji ?? planDetails.sabziChoices ?? 0;
+    const dal = planDetails.dal ?? 0;
+    const rice = planDetails.rice ?? 0;
+    const raita = planDetails.raitaFrequency ?? planDetails.raitaOption ?? "None";
+    const salad = planDetails.saladFrequency ?? planDetails.saladOption ?? "None";
+    const sweetDish = planDetails.sweetDishFrequency ?? planDetails.dessertOption ?? "None";
     return `
       <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; margin-top: 15px;">
         <h4 style="margin: 0 0 10px 0; color: #111827; font-size: 14px; font-weight: 700;">Custom Plan Options:</h4>
         <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #4b5563; line-height: 1.6;">
           <li><strong>Base Plan:</strong> ${planDetails.basePlan || 'Basic'}</li>
           <li><strong>Roti:</strong> ${planDetails.roti || 0} per day</li>
-          <li><strong>Sabzi Choices:</strong> ${planDetails.sabziChoices || 0} per day</li>
-          <li><strong>Raita:</strong> ${planDetails.raitaOption || 'None'}</li>
-          <li><strong>Dessert:</strong> ${planDetails.dessertOption || 'None'}</li>
+          <li><strong>Sabji:</strong> ${sabji} per day</li>
+          <li><strong>Dal:</strong> ${dal} per day</li>
+          <li><strong>Rice:</strong> ${rice} per day</li>
+          <li><strong>Raita:</strong> ${raita}</li>
+          <li><strong>Salad:</strong> ${salad}</li>
+          <li><strong>Sweet Dish:</strong> ${sweetDish}</li>
           <li><strong>Saturday Special:</strong> ${planDetails.saturdaySpecial ? 'Included' : 'Not Included'}</li>
         </ul>
       </div>

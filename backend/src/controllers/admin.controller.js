@@ -1157,7 +1157,7 @@ class AdminController {
   static async getMenuConfig(req, res) {
     try {
       const MenuModel = require("../models/menu.model");
-      const config = await MenuModel.getMenuConfig();
+      const config = await MenuModel.getMenuConfig(true);
       ResponseUtil.send(res, 200, "Menu configuration retrieved successfully", config);
     } catch (error) {
       console.error("Error retrieving menu config:", error);
@@ -1170,16 +1170,19 @@ class AdminController {
       const MenuModel = require("../models/menu.model");
       const newConfig = req.body;
       
-      if (!newConfig || !newConfig.plans || !newConfig.weeklyMenus) {
-        return ResponseUtil.error(res, 400, "Invalid menu configuration data");
+      let validatedConfig;
+      try {
+        validatedConfig = MenuModel.validateMenuConfig(newConfig);
+      } catch (validationError) {
+        return ResponseUtil.error(res, 400, validationError.message);
       }
 
-      await MenuModel.updateMenuConfig(newConfig);
+      await MenuModel.updateMenuConfig(validatedConfig);
       
       // Invalidate cache
       cache.delete("admin_today_deliveries");
       
-      ResponseUtil.send(res, 200, "Menu configuration updated successfully", newConfig);
+      ResponseUtil.send(res, 200, "Menu configuration updated successfully", validatedConfig);
     } catch (error) {
       console.error("Error updating menu config:", error);
       ResponseUtil.error(res, 500, "Failed to update menu config", error);
