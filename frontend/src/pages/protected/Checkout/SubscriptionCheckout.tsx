@@ -216,7 +216,7 @@ const SubscriptionCheckout: React.FC = () => {
 
   const { discountAmount, finalAmount } = getCouponAmounts();
   const basePriceForDelivery = getAdjustedPrice();
-  const isFreeDelivery = (isOneTime && paymentMethod === 'Stripe')
+  const isFreeDelivery = isOneTime
     || basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
   const deliveryFee = isFreeDelivery ? 0 : deliverySettings.deliveryFee;
   const serviceFee = Math.round((finalAmount * 0.025 + 0.30) * 100) / 100;

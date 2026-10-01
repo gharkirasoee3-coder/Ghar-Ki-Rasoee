@@ -176,7 +176,7 @@ const Pricing: React.FC = () => {
           : 'No Sabzi Box (0 Boxes)',
         extraRaita ? 'Extra Raita or Salad included' : (weeklyMenu[selectedDay]?.raita ? 'Standard Raita or Salad included' : 'Fresh Salad & Pickle included'),
         extraSweet ? 'Extra Dessert Sweet included' : 'No dessert sweet',
-        'Delivery fee calculated at checkout',
+        'Free delivery with every payment method',
       ],
       customDetails: {
         day: selectedDay,

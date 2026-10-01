@@ -113,6 +113,61 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
   });
 
   describe("Stripe Checkout Session Delivery Fee Injection", () => {
+    it("recalculates a one-time meal server-side and keeps delivery free", async () => {
+      StripeService.createCheckoutSession.mockResolvedValue({ id: "sess_one_time", url: "https://stripe.com" });
+      mockGet.mockResolvedValue({
+        exists: true,
+        data: () => ({
+          customPricingConfig: {
+            oneTimeBasePrice: 20,
+            oneTimeBaseRoti: 8,
+            oneTimeBaseSabzi: 2,
+            oneTimePricePerRoti: 0.6,
+            oneTimePricePerSabzi: 3,
+            oneTimeRaitaPrice: 2,
+            oneTimeDessertPrice: 3,
+          },
+          deliveryFeeSettings: { minAmountForFreeDelivery: 150, deliveryFee: 15 },
+        }),
+      });
+
+      req.body = {
+        type: "one-time",
+        amount: 0.5,
+        planName: "Single Meal",
+        customDetails: { rotiCount: 10, sabziBoxes: 3 },
+        deliveryAddress: "123 Main St",
+      };
+
+      await PaymentController.createCheckoutSession(req, res);
+
+      expect(ResponseUtil.error).not.toHaveBeenCalled();
+      expect(StripeService.createCheckoutSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 24.2,
+          deliveryFee: 0,
+        })
+      );
+    });
+
+    it("rejects a one-time card checkout without priceable customization details", async () => {
+      req.body = {
+        type: "one-time",
+        amount: 0.5,
+        planName: "Single Meal",
+        deliveryAddress: "123 Main St",
+      };
+
+      await PaymentController.createCheckoutSession(req, res);
+
+      expect(ResponseUtil.error).toHaveBeenCalledWith(
+        res,
+        400,
+        "One-time orders require meal customization details",
+      );
+      expect(StripeService.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
     it("should append a recurring delivery fee line item if subscription is below threshold", async () => {
       StripeService.createCheckoutSession.mockResolvedValue({ id: "sess_123", url: "https://stripe.com" });
       mockGet.mockResolvedValue({
@@ -171,7 +226,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
   });
 
   describe("COD One-Time Order Full Fees (OrderController)", () => {
-    it("should include configured delivery and platform fees below the free-delivery threshold", async () => {
+    it("should include free delivery and the platform fee below the configured threshold", async () => {
       const OrderModel = require("../src/models/order.model");
       OrderModel.createOrder.mockResolvedValue({ orderId: "ord_123" });
       mockGet.mockResolvedValue({
@@ -193,15 +248,15 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
 
       await OrderController.createOrder(req, res);
 
-      // $20 subtotal + $15 delivery + ($20 * 2.5% + $0.30) platform fee.
+      // $20 subtotal + free delivery + ($20 * 2.5% + $0.30) platform fee.
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({
           subtotal: 20,
           discountedSubtotal: 20,
-          deliveryFee: 15,
+          deliveryFee: 0,
           platformServiceFee: 0.8,
-          totalAmount: 35.8,
-          price: 35.8,
+          totalAmount: 20.8,
+          price: 20.8,
         })
       );
       expect(ResponseUtil.send).toHaveBeenCalledWith(
@@ -289,10 +344,10 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
           subtotal: 100,
           discountAmount: 10,
           discountedSubtotal: 90,
-          deliveryFee: 15,
+          deliveryFee: 0,
           platformServiceFee: 2.55,
-          totalAmount: 107.55,
-          price: 107.55,
+          totalAmount: 92.55,
+          price: 92.55,
         })
       );
     });
@@ -330,10 +385,10 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       expect(ResponseUtil.error).not.toHaveBeenCalled();
       expect(OrderModel.createOrder).toHaveBeenCalledWith(expect.objectContaining({
         subtotal: 17.2,
-        deliveryFee: 15,
+        deliveryFee: 0,
         platformServiceFee: 0.73,
-        totalAmount: 32.93,
-        price: 32.93,
+        totalAmount: 17.93,
+        price: 17.93,
       }));
     });
 
@@ -351,7 +406,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
       expect(ResponseUtil.error).toHaveBeenCalledWith(
         res,
         400,
-        "One-time COD orders require meal customization details",
+        "One-time orders require meal customization details",
       );
       expect(OrderModel.createOrder).not.toHaveBeenCalled();
     });
@@ -560,7 +615,7 @@ describe("Dynamic Delivery Fees Unit Tests", () => {
 
       expect(ResponseUtil.error).not.toHaveBeenCalled();
       expect(OrderModel.createOrder).toHaveBeenCalledWith(
-        expect.objectContaining({ city: "Toronto", subtotal: 100, deliveryFee: 25, totalAmount: 127.8 }),
+        expect.objectContaining({ city: "Toronto", subtotal: 100, deliveryFee: 0, totalAmount: 102.8 }),
       );
     });
   });

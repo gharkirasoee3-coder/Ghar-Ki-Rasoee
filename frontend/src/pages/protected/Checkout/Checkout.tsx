@@ -31,15 +31,8 @@ const Checkout: React.FC = () => {
   const [saveAddress, setSaveAddress] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<string[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [deliverySettings, setDeliverySettings] = useState({
-    minAmountForFreeDelivery: 150,
-    deliveryFee: 15,
-  });
-
-  const isCOD = paymentMethod === 'Cash on Delivery';
-  const deliveryFee = isCOD && cartTotal < deliverySettings.minAmountForFreeDelivery
-    ? deliverySettings.deliveryFee
-    : 0;
+  // One-time meal orders include free delivery for every payment method.
+  const deliveryFee = 0;
   const serviceFee = Math.round((cartTotal * 0.025 + 0.30) * 100) / 100;
   const finalTotal = Math.round((cartTotal + deliveryFee + serviceFee) * 100) / 100;
 
@@ -75,22 +68,6 @@ const Checkout: React.FC = () => {
     };
     fetchProfile();
   }, [user]);
-
-  useEffect(() => {
-    const fetchDeliverySettings = async () => {
-      try {
-        const response = await axios.get(`${ENV.API_URL}/menu/plans`, {
-          params: { city: selectedCity },
-        });
-        if (response.data?.data?.deliveryFeeSettings) {
-          setDeliverySettings(response.data.data.deliveryFeeSettings);
-        }
-      } catch (fetchError) {
-        console.error('Failed to fetch delivery fee settings:', fetchError);
-      }
-    };
-    fetchDeliverySettings();
-  }, [selectedCity]);
 
   if (isCartEmpty) {
     return (
@@ -524,16 +501,10 @@ const Checkout: React.FC = () => {
                     <span className="font-semibold text-gray-900 whitespace-nowrap">${cartTotal.toFixed(2)} CAD</span>
                   </div>
 
-                  {isCOD && (
-                    <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
-                      <span className="font-medium">Delivery Fee</span>
-                      {deliveryFee > 0 ? (
-                        <span className="font-semibold text-orange-600 whitespace-nowrap">+${deliveryFee.toFixed(2)} CAD</span>
-                      ) : (
-                        <span className="font-bold text-green-600">FREE</span>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
+                    <span className="font-medium">Delivery Fee</span>
+                    <span className="font-bold text-green-600">FREE</span>
+                  </div>
 
                   <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
                     <span className="flex items-center gap-1 font-medium">

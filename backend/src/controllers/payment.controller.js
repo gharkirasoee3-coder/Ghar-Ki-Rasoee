@@ -70,11 +70,12 @@ class PaymentController {
     try {
       const { uid, email } = req.user;
       const { type, planName, deliveryAddress, deliveryDate, items, couponCode, isRecurring, customDetails, replacePlan, customerPhone, notes } = req.body;
+      const isOneTime = String(type || "").toLowerCase() === "one-time";
       let amount = Number(req.body.amount);
       let pricingSnapshot = null;
       let checkoutCustomDetails = customDetails;
 
-      if (type !== "subscription" && (!Number.isFinite(amount) || amount <= 0)) {
+      if (type !== "subscription" && !isOneTime && (!Number.isFinite(amount) || amount <= 0)) {
         return ResponseUtil.error(res, 400, "Invalid amount");
       }
 
@@ -84,6 +85,15 @@ class PaymentController {
 
       const MenuModel = require("../models/menu.model");
       const menuConfig = (await MenuModel.getMenuConfig(true)) || {};
+
+      // Never trust a client-supplied price for a customized one-time meal.
+      if (isOneTime) {
+        try {
+          amount = MenuModel.calculateOneTimePrice(customDetails, menuConfig);
+        } catch (err) {
+          return ResponseUtil.error(res, 400, err.message);
+        }
+      }
 
       // Prefer the address-derived city so a client cannot choose a cheaper fee region.
       const addressCity = MenuModel.getCityFromAddress(deliveryAddress, menuConfig);
@@ -161,7 +171,6 @@ class PaymentController {
       const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
       let deliveryFee = 0;
       // One-time meals always enjoy free delivery
-      const isOneTime = type && type.toLowerCase() === "one-time";
       if (!isOneTime && amount < deliverySettings.minAmountForFreeDelivery) {
         deliveryFee = deliverySettings.deliveryFee;
       }

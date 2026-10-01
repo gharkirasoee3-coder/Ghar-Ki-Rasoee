@@ -696,7 +696,7 @@ class MenuModel {
    */
   static calculateOneTimePrice(customDetails, config) {
     if (!customDetails || typeof customDetails !== "object") {
-      throw new Error("One-time COD orders require meal customization details");
+      throw new Error("One-time orders require meal customization details");
     }
 
     const rules = {

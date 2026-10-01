@@ -113,10 +113,12 @@ class OrderController {
       let deliveryFee = 0;
       let priceBreakdown = null;
       if (isCOD && isOneTimeOrder) {
+        // One-time meals include free delivery regardless of payment method.
+        // Keep the canonical breakdown for discounts and the platform fee.
         priceBreakdown = PriceUtil.calculateChargeBreakdown(
           subtotal,
           discountAmount,
-          deliverySettings,
+          { ...deliverySettings, deliveryFee: 0 },
         );
         price = priceBreakdown.totalAmount;
         deliveryFee = priceBreakdown.deliveryFee;
