@@ -93,8 +93,8 @@ const AdvancedCaptcha: React.FC<AdvancedCaptchaProps> = ({ onVerify }) => {
     setUserInput(value);
     setShowError(false);
 
-    // Case-insensitive verification
-    if (value.toLowerCase() === captchaCode.toLowerCase()) {
+    // CAPTCHA verification is case-sensitive.
+    if (value === captchaCode) {
       setIsVerified(true);
       onVerify(true);
     } else {
@@ -104,7 +104,7 @@ const AdvancedCaptcha: React.FC<AdvancedCaptchaProps> = ({ onVerify }) => {
   };
 
   const handleBlur = () => {
-    if (userInput && userInput.toLowerCase() !== captchaCode.toLowerCase()) {
+    if (userInput && userInput !== captchaCode) {
       setShowError(true);
     }
   };
@@ -167,7 +167,7 @@ const AdvancedCaptcha: React.FC<AdvancedCaptchaProps> = ({ onVerify }) => {
         )}
       </div>
       <p className="text-[10px] text-gray-400 text-center font-normal">
-        Enter the distorted characters shown above to verify you are a human.
+        Enter the characters exactly as shown. CAPTCHA is case-sensitive.
       </p>
     </div>
   );
