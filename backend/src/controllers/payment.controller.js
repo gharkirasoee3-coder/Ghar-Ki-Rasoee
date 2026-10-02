@@ -74,6 +74,7 @@ class PaymentController {
       let amount = Number(req.body.amount);
       let pricingSnapshot = null;
       let checkoutCustomDetails = customDetails;
+      let subscriptionDeliveryDays = null;
 
       if (type !== "subscription" && !isOneTime && (!Number.isFinite(amount) || amount <= 0)) {
         return ResponseUtil.error(res, 400, "Invalid amount");
@@ -100,6 +101,16 @@ class PaymentController {
       const city = addressCity || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
+
+      if (type === "subscription") {
+        try {
+          subscriptionDeliveryDays = PriceUtil.normalizeSubscriptionDeliveryDays(
+            customDetails?.deliveryDays,
+          );
+        } catch (err) {
+          return ResponseUtil.error(res, 400, err.message);
+        }
+      }
 
       // Validate against category mismatch if address contains a specific recognized city
       if (addressCity && req.body.city) {
@@ -133,6 +144,7 @@ class PaymentController {
         try {
           pricingSnapshot = MenuModel.quoteCustomPlan(customDetails, menuConfig, city);
           amount = pricingSnapshot.customizedSubtotal;
+          subscriptionDeliveryDays = pricingSnapshot.deliveryDays;
           checkoutCustomDetails = {
             isCustomPlan: true,
             basePlan: pricingSnapshot.basePlan,
@@ -153,10 +165,18 @@ class PaymentController {
         }
         try {
           if (Array.isArray(customDetails?.deliveryDays)) {
-            amount = MenuModel.quoteCustomPlan({
+            const scheduleQuote = MenuModel.quoteCustomPlan({
               basePlan: planKey,
               deliveryDays: customDetails.deliveryDays,
-            }, menuConfig, city).customizedSubtotal;
+            }, menuConfig, city);
+            amount = scheduleQuote.customizedSubtotal;
+            subscriptionDeliveryDays = PriceUtil.normalizeSubscriptionDeliveryDays(
+              scheduleQuote.deliveryDays ?? customDetails.deliveryDays,
+            );
+            checkoutCustomDetails = {
+              ...customDetails,
+              deliveryDays: subscriptionDeliveryDays,
+            };
           } else {
             amount = expectedPrice;
           }
@@ -169,10 +189,26 @@ class PaymentController {
       }
 
       const deliverySettings = categoryConfig?.deliveryFeeSettings || menuConfig.deliveryFeeSettings || { minAmountForFreeDelivery: 150, deliveryFee: 15 };
-      let deliveryFee = 0;
-      // One-time meals always enjoy free delivery
-      if (!isOneTime && amount < deliverySettings.minAmountForFreeDelivery) {
-        deliveryFee = deliverySettings.deliveryFee;
+      // One-time meals always enjoy free delivery. Subscription delivery is
+      // charged per unique selected weekday, with missing legacy schedules
+      // treated as the full Monday-Saturday schedule.
+      const deliveryFee = isOneTime
+        ? 0
+        : (type === "subscription" ? PriceUtil.calculateSubscriptionDeliveryFee(
+          amount,
+          deliverySettings,
+          subscriptionDeliveryDays,
+        ) : (amount < deliverySettings.minAmountForFreeDelivery
+          ? deliverySettings.deliveryFee
+          : 0));
+      if (type === "subscription") {
+        checkoutCustomDetails = {
+          ...(checkoutCustomDetails || {}),
+          deliveryDays: subscriptionDeliveryDays,
+          deliveryFeeRate: PriceUtil.getSubscriptionDeliveryFeeRate(deliverySettings),
+          deliveryDayCount: subscriptionDeliveryDays.length,
+          deliveryFeeModel: "per-selected-weekday-v1",
+        };
       }
 
       let finalAmount = amount;
@@ -374,6 +410,9 @@ class PaymentController {
         couponCode: couponCode || null,
         isRecurring: isRecurring === "true",
         deliveryDays: parsedCustomDetails?.deliveryDays || null,
+        deliveryFeeRate: parsedCustomDetails?.deliveryFeeRate ?? null,
+        deliveryDayCount: parsedCustomDetails?.deliveryDayCount ?? null,
+        deliveryFeeModel: parsedCustomDetails?.deliveryFeeModel || null,
         customerPhone: customerPhone || null,
         notes: notes || null,
         ...(priceBreakdown || {}),

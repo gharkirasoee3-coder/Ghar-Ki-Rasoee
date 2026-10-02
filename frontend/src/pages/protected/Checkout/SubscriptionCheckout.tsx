@@ -71,7 +71,7 @@ const SubscriptionCheckout: React.FC = () => {
     ]
   );
 
-  const [deliverySettings, setDeliverySettings] = useState<{ minAmountForFreeDelivery: number; deliveryFee: number }>({
+  const [deliverySettings, setDeliverySettings] = useState<{ minAmountForFreeDelivery: number; deliveryFee: number; deliveryFeePerSelectedDay?: number }>({
     minAmountForFreeDelivery: 150,
     deliveryFee: 15
   });
@@ -218,7 +218,22 @@ const SubscriptionCheckout: React.FC = () => {
   const basePriceForDelivery = getAdjustedPrice();
   const isFreeDelivery = isOneTime
     || basePriceForDelivery >= deliverySettings.minAmountForFreeDelivery;
-  const deliveryFee = isFreeDelivery ? 0 : deliverySettings.deliveryFee;
+  // The admin-configured delivery fee is the rate for one selected weekday.
+  // One-time meals keep their existing free-delivery policy.
+  const selectedDeliveryDayCount = new Set(
+    selectedDays.map((day) => day.toLowerCase())
+  ).size;
+  const hasExplicitOneDayRate = Number.isFinite(deliverySettings.deliveryFeePerSelectedDay);
+  const oneDayDeliveryRate = hasExplicitOneDayRate
+    ? Number(deliverySettings.deliveryFeePerSelectedDay)
+    : deliverySettings.deliveryFee / 6;
+  const deliveryFee = isFreeDelivery
+    ? 0
+    : Math.round(
+        (hasExplicitOneDayRate
+          ? oneDayDeliveryRate * selectedDeliveryDayCount
+          : deliverySettings.deliveryFee * selectedDeliveryDayCount / 6) * 100
+      ) / 100;
   const serviceFee = Math.round((finalAmount * 0.025 + 0.30) * 100) / 100;
   const totalAmount = Math.round((finalAmount + deliveryFee + serviceFee) * 100) / 100;
 
@@ -687,7 +702,16 @@ const SubscriptionCheckout: React.FC = () => {
                 )}
 
                 <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
-                  <span className="font-medium">Delivery Fee</span>
+                  <span className="font-medium">
+                    Delivery Fee
+                    {!isOneTime && deliveryFee > 0 && (
+                      <span className="ml-1 text-[10px] text-gray-400 font-normal">
+                        {hasExplicitOneDayRate
+                          ? `(${selectedDeliveryDayCount} ${selectedDeliveryDayCount === 1 ? 'day' : 'days'} × $${oneDayDeliveryRate.toFixed(2)})`
+                          : `(${selectedDeliveryDayCount} of 6 days; legacy $${deliverySettings.deliveryFee.toFixed(2)} six-day fee)`}
+                      </span>
+                    )}
+                  </span>
                   {deliveryFee > 0 ? (
                     <span className="font-semibold text-orange-600 whitespace-nowrap">+${deliveryFee.toFixed(2)} CAD</span>
                   ) : (

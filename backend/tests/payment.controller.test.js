@@ -437,8 +437,18 @@ describe("PaymentController", () => {
 
     it("should prorate a standard schedule without converting it to a custom plan", async () => {
       const MenuModel = require("../src/models/menu.model");
-      MenuModel.getMenuConfig.mockResolvedValue({ plans: { standard: { price: 190 } } });
-      MenuModel.quoteCustomPlan.mockReturnValue({ customizedSubtotal: 95 });
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: { standard: { price: 190 } },
+        deliveryFeeSettings: {
+          minAmountForFreeDelivery: 150,
+          deliveryFee: 15,
+          deliveryFeePerSelectedDay: 2,
+        },
+      });
+      MenuModel.quoteCustomPlan.mockReturnValue({
+        customizedSubtotal: 95,
+        deliveryDays: ["monday", "wednesday", "friday"],
+      });
       StripeService.createCheckoutSession.mockResolvedValue({ id: "sess-scheduled", url: "https://stripe.com/checkout" });
 
       req.body = {
@@ -455,8 +465,13 @@ describe("PaymentController", () => {
       expect(MenuModel.quoteCustomPlan).toHaveBeenCalledWith(expect.objectContaining({ basePlan: "standard" }), expect.any(Object), null);
       expect(StripeService.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({
         amount: 95,
+        deliveryFee: 6,
         pricingSnapshot: null,
-        customDetails: expect.not.objectContaining({ isCustomPlan: true }),
+        customDetails: expect.objectContaining({
+          deliveryDayCount: 3,
+          deliveryFeeRate: 2,
+          deliveryFeeModel: "per-selected-weekday-v1",
+        }),
       }));
     });
 

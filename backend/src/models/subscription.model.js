@@ -67,6 +67,11 @@ class SubscriptionModel {
         platformServiceFee: planData.platformServiceFee,
         totalAmount: planData.totalAmount,
       } : {}),
+      ...(planData.deliveryFeeModel ? {
+        deliveryFeeModel: planData.deliveryFeeModel,
+        deliveryFeeRate: planData.deliveryFeeRate,
+        deliveryDayCount: planData.deliveryDayCount,
+      } : {}),
       ...(planData.pricingVersion ? {
         pricingVersion: planData.pricingVersion,
         basePackagePrice: planData.basePackagePrice,

@@ -82,7 +82,7 @@ describe("Flexible Subscription Scheduling & Pricing", () => {
       expect(price).toBeCloseTo(144);
     });
 
-    it("should fallback to 6/6 scale if deliveryDays is missing or empty", () => {
+    it("defaults a missing schedule to six days but rejects an explicit empty schedule", () => {
       const customDetailsMissing = {
         roti: 6,
         sabziChoices: 2,
@@ -101,10 +101,10 @@ describe("Flexible Subscription Scheduling & Pricing", () => {
       };
 
       const priceMissing = MenuModel.calculateCustomPrice(customDetailsMissing, mockConfig);
-      const priceEmpty = MenuModel.calculateCustomPrice(customDetailsEmpty, mockConfig);
 
       expect(priceMissing).toBeCloseTo(288);
-      expect(priceEmpty).toBeCloseTo(288);
+      expect(() => MenuModel.calculateCustomPrice(customDetailsEmpty, mockConfig))
+        .toThrow("deliveryDays contains an invalid day");
     });
 
     it("should fallback to base plan pricing defaults if customDetails has a basePlan", () => {

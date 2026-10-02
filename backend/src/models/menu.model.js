@@ -70,10 +70,30 @@ class MenuModel {
   }
 
   static normalizeMenuConfig(data) {
+    const normalizeDeliveryFeeSettings = (settings = {}) => {
+      const configuredPerDayRate = Number(settings.deliveryFeePerSelectedDay);
+      return {
+        ...settings,
+        ...(Number.isFinite(configuredPerDayRate)
+          ? { deliveryFeePerSelectedDay: configuredPerDayRate }
+          : {}),
+      };
+    };
+    const cityCategories = Object.fromEntries(
+      Object.entries(data?.cityCategories || {}).map(([key, category]) => [
+        key,
+        {
+          ...category,
+          deliveryFeeSettings: normalizeDeliveryFeeSettings(category?.deliveryFeeSettings),
+        },
+      ]),
+    );
     return {
       ...data,
       plans: this.normalizePlans(data?.plans || {}),
       customPricingConfig: this.normalizePricingConfig(data?.customPricingConfig || {}),
+      deliveryFeeSettings: normalizeDeliveryFeeSettings(data?.deliveryFeeSettings),
+      cityCategories,
     };
   }
 
@@ -635,7 +655,7 @@ class MenuModel {
     if (fullCents < 0) throw new Error("Customized package price cannot be negative");
 
     let days = customDetails.deliveryDays;
-    if (days === undefined || days === null || (Array.isArray(days) && days.length === 0)) days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    if (days === undefined || days === null) days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
     if (!Array.isArray(days)) throw new Error("deliveryDays must be an array");
     const allowedDays = new Set(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]);
     const uniqueDays = [...new Set(days.map(day => String(day).toLowerCase()))];
@@ -683,10 +703,23 @@ class MenuModel {
     inspectRates(normalized.customPricingConfig.removal, "removal");
     inspectRates(normalized.customPricingConfig.addition, "addition");
     toFinitePrice(normalized.customPricingConfig.basePrice, "basePrice");
+    validateDeliverySettings(normalized.deliveryFeeSettings, "deliveryFeeSettings");
+    for (const [categoryKey, category] of Object.entries(normalized.cityCategories || {})) {
+      validateDeliverySettings(category.deliveryFeeSettings, `cityCategories.${categoryKey}.deliveryFeeSettings`);
+    }
     return normalized;
 
     function toFinitePrice(value, name) {
       if (!Number.isFinite(Number(value)) || Number(value) < 0) throw new Error(`Invalid pricing rate: ${name}`);
+    }
+
+    function validateDeliverySettings(settings, path) {
+      toFinitePrice(settings?.minAmountForFreeDelivery, `${path}.minAmountForFreeDelivery`);
+      if (settings?.deliveryFeePerSelectedDay !== undefined) {
+        toFinitePrice(settings.deliveryFeePerSelectedDay, `${path}.deliveryFeePerSelectedDay`);
+      } else {
+        toFinitePrice(settings?.deliveryFee, `${path}.deliveryFee`);
+      }
     }
   }
 

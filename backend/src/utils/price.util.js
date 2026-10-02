@@ -1,4 +1,13 @@
 class PriceUtil {
+  static SUBSCRIPTION_DELIVERY_DAYS = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+
   static PRICES = {
     PLAN_ONE_TIME: 13,
     PLAN_WEEKLY: 60,
@@ -68,10 +77,85 @@ class PriceUtil {
   }
 
   /**
+   * Normalize a subscription schedule. Missing schedules are legacy six-day
+   * subscriptions, while an explicitly supplied empty/invalid schedule is an
+   * invalid quote rather than a way to avoid the delivery fee.
+   */
+  static normalizeSubscriptionDeliveryDays(deliveryDays) {
+    if (deliveryDays === undefined || deliveryDays === null) {
+      return [...this.SUBSCRIPTION_DELIVERY_DAYS];
+    }
+    if (!Array.isArray(deliveryDays)) {
+      throw new Error("deliveryDays must be an array");
+    }
+
+    const allowedDays = new Set(this.SUBSCRIPTION_DELIVERY_DAYS);
+    const uniqueDays = [...new Set(
+      deliveryDays.map((day) => String(day).toLowerCase()),
+    )];
+    if (!uniqueDays.length || uniqueDays.some((day) => !allowedDays.has(day))) {
+      throw new Error("deliveryDays contains an invalid day");
+    }
+    return uniqueDays;
+  }
+
+  static getSubscriptionDeliveryFeeRate(deliverySettings = {}) {
+    const explicitPerDayRate = Number(deliverySettings.deliveryFeePerSelectedDay);
+    if (Number.isFinite(explicitPerDayRate) && explicitPerDayRate >= 0) {
+      return this.roundCurrency(explicitPerDayRate);
+    }
+    const legacySixDayFeeInCents = Math.max(
+      0,
+      this.toCents(deliverySettings.deliveryFee),
+    );
+    return Number((
+      legacySixDayFeeInCents
+      / 100
+      / this.SUBSCRIPTION_DELIVERY_DAYS.length
+    ).toFixed(6));
+  }
+
+  /**
+   * Calculate a subscription delivery charge in cents. New configurations use
+   * deliveryFeePerSelectedDay. A legacy deliveryFee remains the six-day total so that
+   * rollout does not silently multiply existing customer charges by six.
+   */
+  static calculateSubscriptionDeliveryFee(basePrice, deliverySettings = {}, deliveryDays) {
+    const normalizedDays = this.normalizeSubscriptionDeliveryDays(deliveryDays);
+    const basePriceInCents = Math.max(0, this.toCents(basePrice));
+    const thresholdInCents = Math.max(
+      0,
+      this.toCents(deliverySettings.minAmountForFreeDelivery),
+    );
+    if (basePriceInCents >= thresholdInCents) return 0;
+
+    const explicitPerDayRate = Number(deliverySettings.deliveryFeePerSelectedDay);
+    let feeInCents;
+    if (Number.isFinite(explicitPerDayRate) && explicitPerDayRate >= 0) {
+      feeInCents = Math.max(0, this.toCents(explicitPerDayRate)) * normalizedDays.length;
+    } else {
+      const legacySixDayFeeInCents = Math.max(
+        0,
+        this.toCents(deliverySettings.deliveryFee),
+      );
+      feeInCents = Math.round(
+        legacySixDayFeeInCents * normalizedDays.length
+        / this.SUBSCRIPTION_DELIVERY_DAYS.length,
+      );
+    }
+    return this.fromCents(feeInCents);
+  }
+
+  /**
    * Build the canonical server-side charge breakdown. Delivery eligibility is
    * intentionally based on the undiscounted subtotal; coupons cannot change it.
    */
-  static calculateChargeBreakdown(basePrice, discountAmount = 0, deliverySettings = {}) {
+  static calculateChargeBreakdown(
+    basePrice,
+    discountAmount = 0,
+    deliverySettings = {},
+    options = {},
+  ) {
     const basePriceInCents = Math.max(0, this.toCents(basePrice));
     const discountInCents = Math.min(
       basePriceInCents,
@@ -82,9 +166,15 @@ class PriceUtil {
       0,
       this.toCents(deliverySettings.minAmountForFreeDelivery),
     );
-    const deliveryFeeInCents = basePriceInCents < thresholdInCents
-      ? Math.max(0, this.toCents(deliverySettings.deliveryFee))
-      : 0;
+    const deliveryFeeInCents = options.subscriptionDeliveryFee
+      ? this.toCents(this.calculateSubscriptionDeliveryFee(
+        this.fromCents(basePriceInCents),
+        deliverySettings,
+        options.deliveryDays,
+      ))
+      : (basePriceInCents < thresholdInCents
+        ? Math.max(0, this.toCents(deliverySettings.deliveryFee))
+        : 0);
     const platformServiceFeeInCents =
       Math.round(discountedSubtotalInCents * 0.025) + 30;
     const totalInCents = discountedSubtotalInCents

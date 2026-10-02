@@ -272,8 +272,18 @@ describe("SubscriptionController", () => {
 
     it("should prorate a standard schedule without persisting custom-plan markers", async () => {
       const MenuModel = require("../src/models/menu.model");
-      MenuModel.getMenuConfig.mockResolvedValue({ plans: { standard: { price: 190 } } });
-      MenuModel.quoteCustomPlan.mockReturnValue({ customizedSubtotal: 95 });
+      MenuModel.getMenuConfig.mockResolvedValue({
+        plans: { standard: { price: 190 } },
+        deliveryFeeSettings: {
+          minAmountForFreeDelivery: 150,
+          deliveryFee: 15,
+          deliveryFeePerSelectedDay: 2,
+        },
+      });
+      MenuModel.quoteCustomPlan.mockReturnValue({
+        customizedSubtotal: 95,
+        deliveryDays: ["monday", "wednesday", "friday"],
+      });
       SubscriptionModel.createSubscription.mockResolvedValue({ subscriptionId: "sub-scheduled" });
       req.body = {
         plan: "Standard",
@@ -286,6 +296,10 @@ describe("SubscriptionController", () => {
       expect(MenuModel.getMenuConfig).toHaveBeenCalledWith(true);
       expect(SubscriptionModel.createSubscription).toHaveBeenCalledWith("user-123", expect.objectContaining({
         basePrice: 95,
+        deliveryFee: 6,
+        deliveryDayCount: 3,
+        deliveryFeeRate: 2,
+        deliveryFeeModel: "per-selected-weekday-v1",
         planDetails: expect.not.objectContaining({ custom: true, isCustomPlan: true }),
       }));
     });

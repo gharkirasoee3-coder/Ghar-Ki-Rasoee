@@ -4,6 +4,7 @@ export interface CityCategoryConfig {
   deliveryFeeSettings: {
     minAmountForFreeDelivery: number;
     deliveryFee: number;
+    deliveryFeePerSelectedDay?: number;
   };
   planPrices: {
     basic: number;

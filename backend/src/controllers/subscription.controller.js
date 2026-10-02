@@ -35,6 +35,7 @@ class SubscriptionController {
       let basePrice = planDetails?.price || planDetails || 0;
       let pricingSnapshot = null;
       let storedCustomDetails = customDetails;
+      let subscriptionDeliveryDays;
 
       const MenuModel = require("../models/menu.model");
       const menuConfig = (await MenuModel.getMenuConfig(true)) || {};
@@ -55,6 +56,14 @@ class SubscriptionController {
       const city = addressCity || req.body.city || null;
       const categoryKey = MenuModel.getCityCategory(city, menuConfig);
       const categoryConfig = menuConfig.cityCategories?.[categoryKey];
+
+      try {
+        subscriptionDeliveryDays = PriceUtil.normalizeSubscriptionDeliveryDays(
+          customDetails?.deliveryDays,
+        );
+      } catch (err) {
+        return ResponseUtil.error(res, 400, err.message);
+      }
 
       // Validate against category mismatch if address contains a specific recognized city
       if (addressCity && req.body.city) {
@@ -86,6 +95,7 @@ class SubscriptionController {
         try {
           pricingSnapshot = MenuModel.quoteCustomPlan(customDetails, menuConfig, city);
           basePrice = pricingSnapshot.customizedSubtotal;
+          subscriptionDeliveryDays = pricingSnapshot.deliveryDays;
           storedCustomDetails = {
             isCustomPlan: true,
             basePlan: pricingSnapshot.basePlan,
@@ -106,10 +116,14 @@ class SubscriptionController {
         }
         try {
           if (Array.isArray(customDetails?.deliveryDays)) {
-            basePrice = MenuModel.quoteCustomPlan({
+            const scheduleQuote = MenuModel.quoteCustomPlan({
               basePlan: planKey,
               deliveryDays: customDetails.deliveryDays,
-            }, menuConfig, city).customizedSubtotal;
+            }, menuConfig, city);
+            basePrice = scheduleQuote.customizedSubtotal;
+            subscriptionDeliveryDays = PriceUtil.normalizeSubscriptionDeliveryDays(
+              scheduleQuote.deliveryDays ?? customDetails.deliveryDays,
+            );
           } else {
             basePrice = expectedPrice;
           }
@@ -167,7 +181,13 @@ class SubscriptionController {
         basePrice,
         discountAmount,
         deliverySettings,
+        {
+          subscriptionDeliveryFee: true,
+          deliveryDays: subscriptionDeliveryDays,
+        },
       );
+      const deliveryDayCount = subscriptionDeliveryDays.length;
+      const deliveryFeeRate = PriceUtil.getSubscriptionDeliveryFeeRate(deliverySettings);
 
       let existing = null;
 
@@ -192,7 +212,10 @@ class SubscriptionController {
         paymentStatus: "Pending",
         replacesSubscriptionId: existing?.subscriptionId || null,
         couponCode: couponCode || null,
-        deliveryDays: customDetails?.deliveryDays || null,
+        deliveryDays: subscriptionDeliveryDays,
+        deliveryFeeRate,
+        deliveryDayCount,
+        deliveryFeeModel: "per-selected-weekday-v1",
         ...(pricingSnapshot || {}),
         ...priceBreakdown,
         customerPhone: finalPhone,

@@ -81,6 +81,7 @@ interface CityCategoryConfig {
   deliveryFeeSettings: {
     minAmountForFreeDelivery: number;
     deliveryFee: number;
+    deliveryFeePerSelectedDay?: number;
   };
   planPrices: {
     basic: number;
@@ -105,6 +106,7 @@ interface MenuConfig {
   deliveryFeeSettings?: {
     minAmountForFreeDelivery: number;
     deliveryFee: number;
+    deliveryFeePerSelectedDay?: number;
   };
   cityCategories?: Record<string, CityCategoryConfig>;
 }
@@ -267,7 +269,7 @@ const AdminMenu: React.FC = () => {
     });
   };
 
-  const updateDeliverySetting = (key: 'minAmountForFreeDelivery' | 'deliveryFee', value: number) => {
+  const updateDeliverySetting = (key: 'minAmountForFreeDelivery' | 'deliveryFeePerSelectedDay', value: number) => {
     if (!config) return;
     const updated = { ...config };
     if (!updated.deliveryFeeSettings) {
@@ -279,7 +281,7 @@ const AdminMenu: React.FC = () => {
 
   const updateCityCategorySetting = (
     categoryKey: string,
-    field: 'name' | 'cities' | 'minAmountForFreeDelivery' | 'deliveryFee' | 'basic' | 'standard' | 'premium' | 'customizableBase',
+    field: 'name' | 'cities' | 'minAmountForFreeDelivery' | 'deliveryFeePerSelectedDay' | 'basic' | 'standard' | 'premium' | 'customizableBase',
     value: any
   ) => {
     if (!config) return;
@@ -301,7 +303,7 @@ const AdminMenu: React.FC = () => {
       cat.name = value;
     } else if (field === 'cities') {
       cat.cities = value;
-    } else if (field === 'minAmountForFreeDelivery' || field === 'deliveryFee') {
+    } else if (field === 'minAmountForFreeDelivery' || field === 'deliveryFeePerSelectedDay') {
       cat.deliveryFeeSettings[field] = Number(value) || 0;
     } else {
       cat.planPrices[field] = Number(value) || 0;
@@ -1099,13 +1101,15 @@ const AdminMenu: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Flat Delivery Fee</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">One-Day Delivery Rate</label>
                         <div className="relative flex items-center">
                           <span className="absolute left-3 text-slate-400 font-bold text-sm">$</span>
                           <input
                             type="number"
-                            value={category.deliveryFeeSettings?.deliveryFee ?? 15}
-                            onChange={(e) => updateCityCategorySetting(catKey, 'deliveryFee', e.target.value)}
+                            min="0"
+                            step="0.01"
+                            value={category.deliveryFeeSettings?.deliveryFeePerSelectedDay ?? Number(((category.deliveryFeeSettings?.deliveryFee ?? 15) / 6).toFixed(2))}
+                            onChange={(e) => updateCityCategorySetting(catKey, 'deliveryFeePerSelectedDay', e.target.value)}
                             className="pl-6 pr-10 py-2 w-full border border-slate-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                           />
                           <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
@@ -1533,13 +1537,15 @@ const AdminMenu: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Flat Delivery Fee</label>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">One-Day Delivery Rate</label>
                     <div className="relative flex items-center">
                       <span className="absolute left-3 text-slate-400 font-bold text-xs sm:text-sm">$</span>
                       <input
                         type="number"
-                        value={config.deliveryFeeSettings?.deliveryFee ?? 15}
-                        onChange={(e) => updateDeliverySetting('deliveryFee', Number(e.target.value))}
+                        min="0"
+                        step="0.01"
+                        value={config.deliveryFeeSettings?.deliveryFeePerSelectedDay ?? Number(((config.deliveryFeeSettings?.deliveryFee ?? 15) / 6).toFixed(2))}
+                        onChange={(e) => updateDeliverySetting('deliveryFeePerSelectedDay', Number(e.target.value))}
                         className="pl-7 pr-12 py-2.5 w-full border border-slate-200 rounded-xl font-semibold text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                       />
                       <span className="absolute right-3 text-slate-400 font-bold text-[9px] uppercase">CAD</span>
@@ -1547,7 +1553,7 @@ const AdminMenu: React.FC = () => {
                   </div>
 
                   <p className="text-[10px] text-slate-400 italic pt-1">
-                    Applied globally when an address does not match a specific city configuration tier.
+                    Applied per selected delivery weekday when an address does not match a specific city configuration tier.
                   </p>
                 </div>
               </div>
