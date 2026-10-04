@@ -126,7 +126,7 @@ const Register: React.FC = () => {
   const isPasswordStrong = strengthScore === 5;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-gray-100 via-gray-50 to-red-50/20 p-4 md:p-6 lg:p-8 font-sans">
+    <div className="min-h-[calc(100vh-4rem)] flex items-start sm:items-center justify-center bg-gradient-to-tr from-gray-100 via-gray-50 to-red-50/20 p-4 sm:p-6 md:p-8 font-sans py-8 sm:py-12">
       {/* Outer Card Wrapper */}
       <div className="bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-5xl min-h-[650px] flex flex-col md:flex-row transform transition-all duration-300 hover:shadow-primary/5">
         

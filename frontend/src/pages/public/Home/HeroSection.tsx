@@ -14,7 +14,7 @@ const HeroSection: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="relative min-h-[90vh] flex items-center justify-center bg-[#fffbf5] overflow-hidden pt-28 pb-32 lg:py-0">
+    <div className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center bg-[#fffbf5] overflow-hidden pt-6 pb-16 sm:pt-10 sm:pb-24 lg:py-0">
       {/* Background Blobs & Overlays */}
       <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
         {/* Soft SVG Pattern Overlay (Faded at the bottom to prevent hard lines) */}
