@@ -353,10 +353,10 @@ const CustomizeSubscription: React.FC = () => {
 
   if (loading || !currentDayMenu) {
     return (
-      <PageContainer className="py-20">
+      <PageContainer className="py-12 sm:py-20">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-text-secondary">Loading customization parameters...</p>
+          <p className="text-text-secondary text-sm sm:text-base">Loading customization parameters...</p>
         </div>
       </PageContainer>
     );
@@ -368,55 +368,55 @@ const CustomizeSubscription: React.FC = () => {
   const allSabziOptions = [...sSet1, ...sSet2];
 
   return (
-    <PageContainer className="py-10">
+    <PageContainer className="py-6 sm:py-10">
       {/* Header */}
-      <div className="mb-8 space-y-4">
+      <div className="mb-6 sm:mb-8 space-y-4">
         <button
           onClick={() => navigate('/my-subscription')}
-          className="flex items-center gap-2 text-text-secondary hover:text-primary mb-2 transition font-medium"
+          className="flex items-center gap-2 text-text-secondary hover:text-primary mb-2 transition font-medium text-sm sm:text-base"
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={18} className="sm:w-5 sm:h-5" />
           Back to My Subscription
         </button>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary mb-2 flex items-center gap-2">
-              <Sparkles size={26} className="text-primary" />
-              Customize Your Meal Selections
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-text-primary mb-1 sm:mb-2 flex items-center gap-2">
+              <Sparkles size={24} className="text-primary shrink-0" />
+              <span>Customize Your Meal Selections</span>
             </h1>
-            <p className="text-text-secondary text-sm md:text-base">Configure your dish preferences for your subscribed delivery days.</p>
+            <p className="text-text-secondary text-xs sm:text-sm md:text-base">Configure your dish preferences for your subscribed delivery days.</p>
           </div>
-          <div className="bg-primary/5 px-6 py-3.5 rounded-2xl border-2 border-primary/20 w-fit">
-            <p className="text-xs text-text-secondary uppercase font-bold tracking-wider">Active Plan</p>
-            <p className="text-xl font-black text-primary capitalize">{planType === 'custom' ? 'Custom Plan' : `${planType} Plan`}</p>
+          <div className="bg-primary/5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-2xl border-2 border-primary/20 w-fit shrink-0">
+            <p className="text-[10px] sm:text-xs text-text-secondary uppercase font-bold tracking-wider">Active Plan</p>
+            <p className="text-base sm:text-xl font-black text-primary capitalize">{planType === 'custom' ? 'Custom Plan' : `${planType} Plan`}</p>
           </div>
         </div>
 
         {/* Subscribed Days Notice Banner */}
-        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border border-orange-200/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/40 border border-orange-200/80 rounded-2xl p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-orange-500/10 text-orange-600 rounded-xl shrink-0">
-              <Sparkles size={20} />
+            <div className="p-2 sm:p-2.5 bg-orange-500/10 text-orange-600 rounded-xl shrink-0">
+              <Sparkles size={18} className="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-orange-800">Your Active Delivery Schedule ({days.length} Days / Week)</p>
-              <p className="text-sm font-extrabold text-orange-950">
+              <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-orange-800">Your Active Delivery Schedule ({days.length} Days / Week)</p>
+              <p className="text-xs sm:text-sm font-extrabold text-orange-950 mt-0.5">
                 {days.map(d => dayNames[d]).join(', ')}
               </p>
             </div>
           </div>
-          <span className="text-xs text-orange-700/80 font-medium bg-white/80 px-3 py-1.5 rounded-xl border border-orange-200/50 w-fit">
+          <span className="text-[11px] sm:text-xs text-orange-700/80 font-medium bg-white/80 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-orange-200/50 w-fit shrink-0">
             🔒 Locked per your subscription
           </span>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Day Selector Sidebar */}
-        <div className="col-span-12 lg:col-span-3">
-          <div className="bg-white lg:rounded-2xl border lg:border-gray-200 p-4 sticky top-[73px] lg:top-24 z-30 lg:z-0 -mx-4 lg:mx-0 shadow-sm lg:shadow-none overflow-x-auto lg:overflow-visible">
-            <h3 className="font-extrabold text-base mb-4 hidden lg:block uppercase tracking-wider text-text-secondary">Select Day</h3>
-            <div className="flex lg:flex-col space-x-3 lg:space-x-0 lg:space-y-2 min-w-max lg:min-w-0 px-1 lg:px-0">
+        <div className="lg:col-span-3">
+          <div className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4 sticky top-[68px] sm:top-[76px] lg:top-24 z-20 shadow-sm lg:shadow-none overflow-x-auto no-scrollbar">
+            <h3 className="font-extrabold text-sm uppercase tracking-wider text-text-secondary mb-3 hidden lg:block">Select Day</h3>
+            <div className="flex lg:flex-col gap-2 min-w-max lg:min-w-0">
               {days.map((day) => {
                 const ref = planType === 'custom' ? 'premium' : planType;
                 const dayMenu = weeklyMenus[ref]?.[day] || {};
@@ -440,7 +440,7 @@ const CustomizeSubscription: React.FC = () => {
                   <button
                     key={day}
                     onClick={() => setSelectedDay(day)}
-                    className={`flex-shrink-0 lg:w-full flex items-center gap-2 lg:justify-between px-5 py-2.5 lg:py-3.5 rounded-full lg:rounded-xl font-bold transition-all text-sm lg:text-base border lg:border-0 ${
+                    className={`flex-shrink-0 lg:w-full flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-xl font-bold transition-all text-xs sm:text-sm lg:text-base border ${
                       selectedDay === day
                         ? 'bg-primary text-white shadow-md border-primary'
                         : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'
@@ -459,10 +459,10 @@ const CustomizeSubscription: React.FC = () => {
 
         {/* Main Customization Area */}
         <div className="lg:col-span-9">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 shadow-sm">
-            <div className="mb-6">
-              <h2 className="text-2xl font-extrabold text-text-primary mb-1">{dayNames[selectedDay]}'s Menu Choices</h2>
-              <p className="text-text-secondary text-sm">
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 md:p-8 shadow-sm">
+            <div className="mb-5 sm:mb-6">
+              <h2 className="text-xl sm:text-2xl font-extrabold text-text-primary mb-1">{dayNames[selectedDay]}'s Menu Choices</h2>
+              <p className="text-text-secondary text-xs sm:text-sm">
                 {isSaturdaySpecialActive() 
                   ? "It's Saturday Special! Customize your premium treat." 
                   : getSabziCount() === 0
@@ -475,25 +475,25 @@ const CustomizeSubscription: React.FC = () => {
             {/* Saturday Special View */}
             {isSaturdaySpecialActive() ? (
               <div className="space-y-6">
-                <div className="bg-gradient-to-r from-yellow-50 to-orange-50/50 border-2 border-yellow-400/60 rounded-2xl p-6 shadow-sm">
-                  <div className="flex items-center gap-2 mb-6">
-                    <Star className="text-yellow-600" size={26} fill="currentColor" />
-                    <h3 className="text-xl font-black text-orange-950">Saturday Special</h3>
-                    <Sparkles className="text-yellow-600 animate-pulse" size={22} />
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50/50 border-2 border-yellow-400/60 rounded-2xl p-4 sm:p-6 shadow-sm">
+                  <div className="flex items-center gap-2 mb-5 sm:mb-6">
+                    <Star className="text-yellow-600 shrink-0" size={24} fill="currentColor" />
+                    <h3 className="text-lg sm:text-xl font-black text-orange-950">Saturday Special</h3>
+                    <Sparkles className="text-yellow-600 animate-pulse shrink-0" size={20} />
                   </div>
 
                   {/* Special Food Selection */}
-                  <div className="mb-8">
-                    <h4 className="font-bold text-sm text-orange-950 uppercase tracking-wider mb-4">Choose Your Special Dish:</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="mb-6 sm:mb-8">
+                    <h4 className="font-bold text-xs sm:text-sm text-orange-950 uppercase tracking-wider mb-3 sm:mb-4">Choose Your Special Dish:</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                       {currentDayMenu.specialFoodOptions?.map((food: string) => (
                         <button
                           key={food}
                           onClick={() => handleSpecialSelect('specialFood', food)}
-                          className={`p-4 rounded-xl border-2 font-bold transition-all text-center ${
+                          className={`p-3.5 sm:p-4 rounded-xl border-2 font-bold transition-all text-center text-xs sm:text-sm leading-snug break-words min-h-[54px] flex items-center justify-center ${
                             currentDayPrefs.specialFood === food
-                              ? 'border-orange-500 bg-orange-100 text-orange-950 shadow-md'
-                              : 'border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50'
+                              ? 'border-orange-500 bg-orange-100 text-orange-950 shadow-md ring-2 ring-orange-500/20'
+                              : 'border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50 text-gray-800'
                           }`}
                         >
                           {food}
@@ -504,16 +504,16 @@ const CustomizeSubscription: React.FC = () => {
 
                   {/* Dessert Selection */}
                   <div>
-                    <h4 className="font-bold text-sm text-pink-950 uppercase tracking-wider mb-4">Choose Saturday Dessert:</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <h4 className="font-bold text-xs sm:text-sm text-pink-950 uppercase tracking-wider mb-3 sm:mb-4">Choose Saturday Dessert:</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                       {currentDayMenu.dessertOptions?.map((dessert: string) => (
                         <button
                           key={dessert}
                           onClick={() => handleSpecialSelect('dessert', dessert)}
-                          className={`p-4 rounded-xl border-2 font-bold transition-all text-center ${
+                          className={`p-3.5 sm:p-4 rounded-xl border-2 font-bold transition-all text-center text-xs sm:text-sm leading-snug break-words min-h-[54px] flex items-center justify-center ${
                             currentDayPrefs.dessert === dessert
-                              ? 'border-pink-500 bg-pink-100 text-pink-950 shadow-md'
-                              : 'border-gray-200 bg-white hover:border-pink-300 hover:bg-pink-50'
+                              ? 'border-pink-500 bg-pink-100 text-pink-950 shadow-md ring-2 ring-pink-500/20'
+                              : 'border-gray-200 bg-white hover:border-pink-300 hover:bg-pink-50 text-gray-800'
                           }`}
                         >
                           {dessert}
@@ -525,27 +525,27 @@ const CustomizeSubscription: React.FC = () => {
               </div>
             ) : (
               /* Regular Day Sabzi Selector */
-              <div className="space-y-6">
+              <div className="space-y-5 sm:space-y-6">
                 {getSabziCount() === 0 && (
-                  <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
-                    <p className="text-gray-500 font-semibold">No sabzi included in your plan</p>
+                  <div className="bg-gray-50 rounded-2xl p-5 sm:p-6 border border-gray-200 text-center">
+                    <p className="text-gray-600 font-bold text-sm sm:text-base">No sabzi included in your plan</p>
                     <p className="text-xs text-gray-400 mt-1">Your custom plan does not include any daily sabzi selections.</p>
                   </div>
                 )}
 
                 {/* 1 Sabzi Choice */}
                 {getSabziCount() === 1 && (
-                  <div className="bg-primary/5 rounded-2xl p-6 border border-primary/10">
-                    <h4 className="font-bold text-base text-text-primary uppercase tracking-wider mb-4">Choose Your Main Sabzi:</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-primary/5 rounded-2xl p-4 sm:p-6 border border-primary/10">
+                    <h4 className="font-bold text-xs sm:text-sm text-text-primary uppercase tracking-wider mb-3 sm:mb-4">Choose Your Main Sabzi:</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                       {allSabziOptions.map((sabzi) => (
                         <button
                           key={sabzi}
                           onClick={() => handleSabziSelect(sabzi, 1)}
-                          className={`p-4 rounded-xl border-2 font-bold transition-all text-center ${
+                          className={`p-3.5 sm:p-4 rounded-xl border-2 font-bold transition-all text-center text-xs sm:text-sm leading-snug break-words min-h-[54px] flex items-center justify-center ${
                             currentDayPrefs.sabzi1 === sabzi
-                              ? 'border-primary bg-primary/10 text-primary shadow-md'
-                              : 'border-gray-200 bg-white hover:border-primary/40 hover:bg-primary/5'
+                              ? 'border-primary bg-primary/10 text-primary shadow-md ring-2 ring-primary/20'
+                              : 'border-gray-200 bg-white hover:border-primary/40 hover:bg-primary/5 text-gray-800'
                           }`}
                         >
                           {sabzi}
@@ -558,17 +558,17 @@ const CustomizeSubscription: React.FC = () => {
                 {/* 2 Sabzi Choices (Sets) */}
                 {getSabziCount() >= 2 && (
                   <>
-                    <div className="bg-blue-50/50 rounded-2xl p-6 border border-blue-200/60">
-                      <h4 className="font-bold text-base text-blue-950 uppercase tracking-wider mb-4">Sabzi Selection 1 (Set A):</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-blue-50/50 rounded-2xl p-4 sm:p-6 border border-blue-200/60">
+                      <h4 className="font-bold text-xs sm:text-sm text-blue-950 uppercase tracking-wider mb-3 sm:mb-4">Sabzi Selection 1 (Set A):</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                         {sSet1.map((sabzi: string) => (
                           <button
                             key={sabzi}
                             onClick={() => handleSabziSelect(sabzi, 1)}
-                            className={`p-4 rounded-xl border-2 font-bold transition-all text-center ${
+                            className={`p-3.5 sm:p-4 rounded-xl border-2 font-bold transition-all text-center text-xs sm:text-sm leading-snug break-words min-h-[54px] flex items-center justify-center ${
                               currentDayPrefs.sabzi1 === sabzi
-                                ? 'border-blue-600 bg-blue-100 text-blue-950 shadow-md'
-                                : 'border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50/30'
+                                ? 'border-blue-600 bg-blue-100 text-blue-950 shadow-md ring-2 ring-blue-500/20'
+                                : 'border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50/30 text-gray-800'
                             }`}
                           >
                             {sabzi}
@@ -577,17 +577,17 @@ const CustomizeSubscription: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="bg-green-50/50 rounded-2xl p-6 border border-green-200/60">
-                      <h4 className="font-bold text-base text-green-950 uppercase tracking-wider mb-4">Sabzi Selection 2 (Set B):</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-green-50/50 rounded-2xl p-4 sm:p-6 border border-green-200/60">
+                      <h4 className="font-bold text-xs sm:text-sm text-green-950 uppercase tracking-wider mb-3 sm:mb-4">Sabzi Selection 2 (Set B):</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                         {sSet2.map((sabzi: string) => (
                           <button
                             key={sabzi}
                             onClick={() => handleSabziSelect(sabzi, 2)}
-                            className={`p-4 rounded-xl border-2 font-bold transition-all text-center ${
+                            className={`p-3.5 sm:p-4 rounded-xl border-2 font-bold transition-all text-center text-xs sm:text-sm leading-snug break-words min-h-[54px] flex items-center justify-center ${
                               currentDayPrefs.sabzi2 === sabzi
-                                ? 'border-green-600 bg-green-100 text-green-950 shadow-md'
-                                : 'border-gray-200 bg-white hover:border-green-400 hover:bg-green-50/30'
+                                ? 'border-green-600 bg-green-100 text-green-950 shadow-md ring-2 ring-green-500/20'
+                                : 'border-gray-200 bg-white hover:border-green-400 hover:bg-green-50/30 text-gray-800'
                             }`}
                           >
                             {sabzi}
@@ -600,17 +600,17 @@ const CustomizeSubscription: React.FC = () => {
 
                 {/* 3+ Sabzi Choices (Custom only) */}
                 {getSabziCount() >= 3 && (
-                  <div className="bg-purple-50/50 rounded-2xl p-6 border border-purple-200/60">
-                    <h4 className="font-bold text-base text-purple-950 uppercase tracking-wider mb-4">Sabzi Selection 3 (Extra Selection):</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-purple-50/50 rounded-2xl p-4 sm:p-6 border border-purple-200/60">
+                    <h4 className="font-bold text-xs sm:text-sm text-purple-950 uppercase tracking-wider mb-3 sm:mb-4">Sabzi Selection 3 (Extra Selection):</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                       {allSabziOptions.map((sabzi: string) => (
                         <button
                           key={sabzi}
                           onClick={() => handleSabziSelect(sabzi, 3)}
-                          className={`p-4 rounded-xl border-2 font-bold transition-all text-center ${
+                          className={`p-3.5 sm:p-4 rounded-xl border-2 font-bold transition-all text-center text-xs sm:text-sm leading-snug break-words min-h-[54px] flex items-center justify-center ${
                             currentDayPrefs.sabzi3 === sabzi
-                              ? 'border-purple-600 bg-purple-100 text-purple-950 shadow-md'
-                              : 'border-gray-200 bg-white hover:border-purple-400 hover:bg-purple-50/30'
+                              ? 'border-purple-600 bg-purple-100 text-purple-950 shadow-md ring-2 ring-purple-500/20'
+                              : 'border-gray-200 bg-white hover:border-purple-400 hover:bg-purple-50/30 text-gray-800'
                           }`}
                         >
                           {sabzi}
@@ -622,12 +622,12 @@ const CustomizeSubscription: React.FC = () => {
 
                 {/* Side Option Choice Block */}
                 {isRaitaIncludedToday() && (
-                  <div className="bg-orange-50/40 rounded-2xl p-5 border border-orange-200 shadow-xs my-4">
+                  <div className="bg-orange-50/40 rounded-2xl p-4 sm:p-5 border border-orange-200 shadow-xs my-4">
                     <div className="mb-3">
-                      <h4 className="font-black text-sm text-orange-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <h4 className="font-black text-xs sm:text-sm text-orange-950 uppercase tracking-wider flex items-center gap-1.5">
                         <span>🥗</span> Choose Daily Side Dish:
                       </h4>
-                      <p className="text-[11px] font-semibold text-orange-850 mt-0.5">
+                      <p className="text-[11px] sm:text-xs font-semibold text-orange-850 mt-0.5">
                         Select which fresh side option you would like to receive with today's delivery:
                       </p>
                     </div>
@@ -648,23 +648,23 @@ const CustomizeSubscription: React.FC = () => {
                                 }
                               }));
                             }}
-                            className={`p-3 rounded-xl border-2 font-black transition-all flex items-center gap-3.5 shadow-xs group ${
+                            className={`p-3 sm:p-3.5 rounded-xl border-2 font-black transition-all flex items-center gap-3 shadow-xs group ${
                               isSelected
                                 ? 'border-[#ea580c] bg-orange-100/90 text-orange-950 shadow-xs ring-2 ring-[#ea580c]/15'
                                 : 'border-gray-250 bg-white text-gray-700 hover:border-orange-350 hover:bg-orange-50/10'
                             }`}
                           >
-                            <span className="text-2xl group-hover:scale-110 transition-transform duration-205">
+                            <span className="text-xl sm:text-2xl group-hover:scale-110 transition-transform duration-200 shrink-0">
                               {side === 'Raita' ? '🥣' : '🥗'}
                             </span>
-                            <div className="flex flex-col text-left mr-auto">
-                              <span className="text-xs font-black">{side}</span>
-                              <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
+                            <div className="flex flex-col text-left mr-auto min-w-0">
+                              <span className="text-xs sm:text-sm font-black truncate">{side}</span>
+                              <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">
                                 {side === 'Raita' ? 'Fresh Yogurt Raita' : 'Crispy Garden Salad'}
                               </span>
                             </div>
                             {isSelected && (
-                              <span className="px-2.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-[#ea580c] text-white">
+                              <span className="px-2 py-0.5 rounded-md text-[8px] sm:text-[9px] font-black uppercase tracking-wider bg-[#ea580c] text-white shrink-0">
                                 Selected
                               </span>
                             )}
@@ -676,30 +676,30 @@ const CustomizeSubscription: React.FC = () => {
                 )}
 
                 {/* Dynamic meal inclusion list */}
-                <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-2xl p-5 border border-gray-200 flex flex-col gap-3 shadow-sm">
-                  <h5 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Other Inclusions for this day:</h5>
-                  <div className="flex flex-wrap gap-4 text-xs font-bold text-gray-700">
-                    <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-150 shadow-xs">
+                <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-2xl p-4 sm:p-5 border border-gray-200 flex flex-col gap-2.5 shadow-sm">
+                  <h5 className="font-bold text-gray-900 text-[11px] sm:text-xs uppercase tracking-wider">Other Inclusions for this day:</h5>
+                  <div className="flex flex-wrap gap-2.5 sm:gap-3 text-xs font-bold text-gray-700">
+                    <div className="flex items-center gap-1.5 sm:gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs">
                       <span>🫓</span>
                       <span>{planType === 'custom' ? customSpecs?.roti : currentDayMenu.roti} Tawa Roti</span>
                     </div>
 
                     {planType === 'custom' && customSpecs?.rice && customSpecs.rice > 0 ? (
-                      <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-150 shadow-xs">
+                      <div className="flex items-center gap-1.5 sm:gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs">
                         <span>🍚</span>
                         <span>{customSpecs.rice} Rice Bowl{customSpecs.rice > 1 ? 's' : ''}</span>
                       </div>
                     ) : null}
 
                     {isRaitaIncludedToday() && (
-                      <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-150 shadow-xs">
+                      <div className="flex items-center gap-1.5 sm:gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs">
                         <span>🥗</span>
                         <span className="text-[#ea580c]">Selected Side: {currentDayPrefs.sideOption || 'Raita'}</span>
                       </div>
                     )}
 
                     {isDessertIncludedToday() && (
-                      <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-150 shadow-xs">
+                      <div className="flex items-center gap-1.5 sm:gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs">
                         <span>🍮</span>
                         <span className="text-pink-600">Dessert Included</span>
                       </div>
@@ -713,18 +713,18 @@ const CustomizeSubscription: React.FC = () => {
       </div>
 
       {/* Save Button */}
-      <div className="mt-8 flex justify-center flex-col items-center gap-2.5">
+      <div className="mt-8 flex justify-center flex-col items-center gap-3">
         <button
           onClick={handleSavePreferences}
           disabled={saving}
-          className="flex items-center gap-3 px-10 py-4 bg-primary text-white hover:bg-primary-hover rounded-xl font-bold text-lg shadow-lg hover:shadow-primary/30 transition disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
+          className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 sm:px-12 py-3.5 sm:py-4 bg-primary text-white hover:bg-primary-hover rounded-xl font-bold text-base sm:text-lg shadow-lg hover:shadow-primary/30 transition disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
         >
-          <Save size={22} />
-          {saving ? 'Saving Preferences...' : 'Save Preferences'}
+          <Save size={20} className="sm:w-[22px] sm:h-[22px]" />
+          <span>{saving ? 'Saving Preferences...' : 'Save Preferences'}</span>
         </button>
-        <p className="text-xs text-text-secondary font-medium flex items-center gap-1.5 text-center max-w-md">
+        <p className="text-[11px] sm:text-xs text-text-secondary font-medium flex items-center gap-1.5 text-center max-w-md px-2">
           <span>💡</span>
-          Unchanged or unselected days will automatically receive the chef&apos;s fresh default daily rotation.
+          <span>Unchanged or unselected days will automatically receive the chef&apos;s fresh default daily rotation.</span>
         </p>
       </div>
     </PageContainer>

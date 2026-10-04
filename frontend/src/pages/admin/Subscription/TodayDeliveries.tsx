@@ -362,7 +362,7 @@ const TodayDeliveries: React.FC = () => {
                   isBasic ? 'border-emerald-500' : 'border-amber-500'
                 }`}
               >
-                <div className="p-6 pb-2">
+                <div className="p-4 sm:p-6 pb-2">
                   {/* Subscription ID & Status Bar */}
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <button
@@ -389,20 +389,20 @@ const TodayDeliveries: React.FC = () => {
                   </div>
 
                   <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4">
                       <div className="relative">
-                          <div className="w-14 h-14 bg-gradient-to-br from-gray-50 to-gray-100 text-gray-900 rounded-2xl flex items-center justify-center font-black text-xl border border-gray-200 group-hover:from-primary group-hover:to-primary-hover group-hover:text-white transition-all duration-300">
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-50 to-gray-100 text-gray-900 rounded-2xl flex items-center justify-center font-black text-lg sm:text-xl border border-gray-200 group-hover:from-primary group-hover:to-primary-hover group-hover:text-white transition-all duration-300 shrink-0">
                               {delivery.customerName.charAt(0)}
                           </div>
-                          <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-lg flex items-center justify-center border-2 border-white shadow-sm ${
+                          <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center border-2 border-white shadow-sm ${
                               delivery.mealPreference === 'Veg' ? 'bg-green-500' : 'bg-red-500'
                           }`} title={`Diet: ${delivery.mealPreference}`}>
-                             <div className={`w-2 h-2 rounded-full bg-white`}></div>
+                             <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white`}></div>
                           </div>
                       </div>
-                      <div>
-                          <h3 className="font-black text-gray-900 text-lg leading-tight group-hover:text-primary transition-colors">{delivery.customerName}</h3>
-                          <div className="flex items-center flex-wrap gap-2 mt-1">
+                      <div className="min-w-0">
+                          <h3 className="font-black text-gray-900 text-base sm:text-lg leading-tight group-hover:text-primary transition-colors truncate">{delivery.customerName}</h3>
+                          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 mt-1">
                               <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                                   isPremium ? 'bg-purple-100 text-purple-700' : 
                                   isStandard ? 'bg-blue-100 text-blue-700' : 
@@ -436,21 +436,21 @@ const TodayDeliveries: React.FC = () => {
                           </div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-col items-end gap-2 shrink-0">
                         {delivery.phone && delivery.phone !== 'N/A' ? (
                           <a 
                             href={`tel:${delivery.phone}`}
-                            className="p-3 bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
+                            className="p-2.5 sm:p-3 bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
                             title="Call Customer"
                           >
-                             <Phone size={20} />
+                             <Phone size={18} className="sm:w-5 sm:h-5" />
                           </a>
                         ) : (
                           <span 
-                            className="p-3 bg-gray-50 text-gray-300 rounded-xl cursor-not-allowed opacity-50"
+                            className="p-2.5 sm:p-3 bg-gray-50 text-gray-300 rounded-xl cursor-not-allowed opacity-50"
                             title="No phone number on file"
                           >
-                             <Phone size={20} />
+                             <Phone size={18} className="sm:w-5 sm:h-5" />
                           </span>
                         )}
                     </div>
@@ -460,17 +460,17 @@ const TodayDeliveries: React.FC = () => {
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(delivery.address)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block bg-gray-50 rounded-2xl p-4 border border-gray-100 hover:bg-primary/10 hover:border-primary/20 hover:shadow-sm transition-all duration-300 group/address"
+                    className="block bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 hover:bg-primary/10 hover:border-primary/20 hover:shadow-sm transition-all duration-300 group/address"
                   >
-                      <div className="flex gap-3">
-                          <div className="mt-1">
-                              <div className="p-2 bg-white rounded-lg text-primary shadow-sm group-hover/address:scale-110 transition-transform">
-                                  <MapPin size={18} />
+                      <div className="flex gap-2.5 sm:gap-3">
+                          <div className="mt-0.5 sm:mt-1">
+                              <div className="p-1.5 sm:p-2 bg-white rounded-lg text-primary shadow-sm group-hover/address:scale-110 transition-transform">
+                                  <MapPin size={16} className="sm:w-[18px] sm:h-[18px]" />
                               </div>
                           </div>
-                          <div className="space-y-1">
+                          <div className="space-y-0.5 sm:space-y-1 min-w-0">
                               <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Delivery Address</p>
-                              <p className="text-sm font-bold text-gray-800 leading-relaxed line-clamp-2">
+                              <p className="text-xs sm:text-sm font-bold text-gray-800 leading-relaxed line-clamp-2">
                                   {delivery.address}
                               </p>
                           </div>
@@ -478,7 +478,7 @@ const TodayDeliveries: React.FC = () => {
                   </a>
                 </div>
                 
-                <div className="px-6 py-4 flex-1">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 flex-1">
                   <div className="space-y-4">
                       <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">

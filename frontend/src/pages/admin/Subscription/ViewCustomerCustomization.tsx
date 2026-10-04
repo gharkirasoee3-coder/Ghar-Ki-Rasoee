@@ -123,12 +123,12 @@ const ViewCustomerCustomization: React.FC = () => {
         </div>
         
         {customerInfo && (
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 min-w-[300px]">
-                <div className="w-14 h-14 bg-gradient-to-br from-primary to-orange-500 text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-lg shadow-primary/20">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-primary to-orange-500 text-white rounded-xl flex items-center justify-center font-bold text-lg sm:text-xl shadow-lg shadow-primary/20 shrink-0">
                     {(customerInfo.customerName || customerInfo.userName || customerInfo.userId).charAt(0).toUpperCase()}
                 </div>
-                <div>
-                   <div className="flex items-center gap-2 mb-1">
+                <div className="min-w-0 flex-1">
+                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                            planType === 'premium' ? 'bg-purple-100 text-purple-700' : 
                            planType === 'standard' ? 'bg-blue-100 text-blue-700' : 
@@ -136,9 +136,9 @@ const ViewCustomerCustomization: React.FC = () => {
                        }`}>
                            {planType === 'custom' ? 'Customizable' : planType} Plan
                        </span>
-                       <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">ID: {subscriptionId?.slice(0, 8)}</span>
+                       <span className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">ID: {subscriptionId?.slice(0, 8)}</span>
                    </div>
-                   <p className="font-bold text-gray-900 text-lg">{customerInfo.customerName || customerInfo.userName || 'Customer Profile'}</p>
+                   <p className="font-bold text-gray-900 text-base sm:text-lg truncate">{customerInfo.customerName || customerInfo.userName || 'Customer Profile'}</p>
                 </div>
             </div>
         )}

@@ -76,6 +76,11 @@ const AdminLayout: React.FC = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setIsSidebarOpen(false);
+                  }
+                }}
                 className={({ isActive }) => `
                   flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
                   ${isActive 
@@ -130,7 +135,7 @@ const AdminLayout: React.FC = () => {
           isSidebarOpen ? 'md:ml-64 ml-0' : 'md:ml-20 ml-0'
         } pt-20 md:pt-0`}
       >
-        <div className="p-4 md:p-8">
+        <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
           <Outlet />
         </div>
       </main>
