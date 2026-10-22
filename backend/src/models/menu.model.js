@@ -575,7 +575,10 @@ class MenuModel {
     }
     const normalizedConfig = this.normalizeMenuConfig(config || {});
     const rules = normalizedConfig.customPricingConfig;
-    const basePlan = String(customDetails.basePlan || "scratch").toLowerCase();
+    let basePlan = String(customDetails.basePlan || "scratch").toLowerCase();
+    if (basePlan === "customizable" || basePlan === "custom" || basePlan === "build_from_scratch") {
+      basePlan = "scratch";
+    }
     if (!["scratch", "basic", "standard", "premium"].includes(basePlan)) {
       throw new Error(`Invalid base plan: ${customDetails.basePlan}`);
     }
@@ -653,6 +656,10 @@ class MenuModel {
     const additionCents = additions.reduce((sum, line) => sum + Math.round(line.total * 100), 0);
     const fullCents = baseCents - removalCents + additionCents;
     if (fullCents < 0) throw new Error("Customized package price cannot be negative");
+    const totalItems = selected.roti + selected.sabji + selected.dal + selected.rice;
+    if (basePlan === "scratch" && (totalItems === 0 || fullCents <= 0)) {
+      throw new Error("Please select at least one meal item to build your plan");
+    }
 
     let days = customDetails.deliveryDays;
     if (days === undefined || days === null) days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];

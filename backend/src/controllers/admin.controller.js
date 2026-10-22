@@ -350,10 +350,28 @@ class AdminController {
         if (customRice !== undefined && Number(customRice) > 0) {
           finalPreference.rice = `${customRice} Rice`;
         }
+        const customDal = sub.customDetails?.dal !== undefined ? sub.customDetails.dal : sub.planDetails?.dal;
+        if (customDal !== undefined && Number(customDal) > 0) {
+          finalPreference.dal = `${customDal} Dal`;
+        }
+        const customSabji = sub.customDetails?.sabji ?? sub.customDetails?.sabziChoices ?? sub.planDetails?.sabziChoices;
+        if (customSabji !== undefined && Number(customSabji) > 0) {
+          finalPreference.sabzi_count = `${customSabji} Sabji`;
+        }
 
         if (finalPreference.sideOption) {
           finalPreference.side_option = finalPreference.sideOption;
           delete finalPreference.sideOption;
+        }
+
+        // Apply custom side option from subscription details
+        const customRaita = sub.customDetails?.raitaFrequency || sub.planDetails?.raitaFrequency;
+        const customSalad = sub.customDetails?.saladFrequency || sub.planDetails?.saladFrequency;
+        if (customRaita && customRaita !== 'none') {
+          finalPreference.side_option = 'Raita';
+        }
+        if (customSalad && customSalad !== 'none') {
+          finalPreference.side_option = finalPreference.side_option ? `${finalPreference.side_option} + Salad` : 'Salad';
         }
 
         // If a user explicitly saved empty strings, clean them up
@@ -381,10 +399,12 @@ class AdminController {
         const planLowerClean = (sub.plan || '').toLowerCase();
         const hasSideOption = planLowerClean.includes('premium') || 
                               planLowerClean.includes('standard') || 
-                              planLowerClean.includes('basic');
+                              planLowerClean.includes('basic') ||
+                              Boolean(customRaita && customRaita !== 'none') ||
+                              Boolean(customSalad && customSalad !== 'none');
 
         if (hasSideOption) {
-          if (!finalPreference.side_option || finalPreference.side_option === 'Raita or Salad' || finalPreference.side_option !== 'Salad') {
+          if (!finalPreference.side_option || finalPreference.side_option === 'Raita or Salad') {
             finalPreference.side_option = 'Raita';
           }
         } else {

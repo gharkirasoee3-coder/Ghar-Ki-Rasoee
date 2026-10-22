@@ -150,14 +150,20 @@ const CustomizeSubscription: React.FC = () => {
         let currentPlanType: 'basic' | 'standard' | 'premium' | 'custom' = 'standard';
         let specs: CustomSpecs | null = null;
 
-        if (details.custom || plan.includes('custom')) {
+        if (details.custom || plan.includes('custom') || plan.includes('scratch')) {
           currentPlanType = 'custom';
+          const sabziCount = Number(details.sabziChoices) || Number(details.sabji) || 2;
+          const raitaOpt = (details.raitaOption as 'none' | '3days' | 'daily') || 
+            (details.raitaFrequency === 'daily' ? 'daily' : details.raitaFrequency === 'threePerWeek' ? '3days' : 'none');
+          const dessertOpt = (details.dessertOption as 'none' | 'weekly' | 'daily') || 
+            (details.sweetDishFrequency === 'twicePerWeek' ? 'weekly' : 'none');
+
           specs = {
-            roti: Number(details.roti) !== undefined ? Number(details.roti) : 6,
+            roti: Number(details.roti) !== undefined && !isNaN(Number(details.roti)) ? Number(details.roti) : 6,
             rice: Number(details.rice) || 0,
-            sabziChoices: Number(details.sabziChoices) || 2,
-            raitaOption: details.raitaOption || '3days',
-            dessertOption: details.dessertOption || 'none',
+            sabziChoices: sabziCount,
+            raitaOption: raitaOpt,
+            dessertOption: dessertOpt,
             saturdaySpecial: !!details.saturdaySpecial
           };
           setCustomSpecs(specs);

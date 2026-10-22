@@ -86,4 +86,36 @@ describe("custom subscription pricing v2", () => {
     expect(() => MenuModel.quoteCustomPlan({ basePlan: "basic", selections: { roti: 1.5 } }, config)).toThrow("whole number");
     expect(() => MenuModel.quoteCustomPlan({ basePlan: "basic", selections: { saturdaySpecial: "yes" } }, config)).toThrow("true or false");
   });
+
+  it("calculates build-from-scratch pricing purely from additions and normalizes aliases", () => {
+    const scratchConfig = MenuModel.normalizeMenuConfig({
+      ...config,
+      customPricingConfig: { ...config.customPricingConfig, basePrice: 0 }
+    });
+
+    const quote = MenuModel.quoteCustomPlan({
+      basePlan: "customizable",
+      selections: { roti: 6, sabji: 1, dal: 1, rice: 0, raitaFrequency: "threePerWeek" }
+    }, scratchConfig);
+
+    expect(quote.basePlan).toBe("scratch");
+    expect(quote.basePackagePrice).toBe(0);
+    expect(quote.removals).toHaveLength(0);
+    expect(quote.removalTotal).toBe(0);
+    // 6 Roti ($48) + 1 Sabji ($55) + 1 Dal ($55) + Raita 3x/wk ($15) = $173
+    expect(quote.additionTotal).toBe(173);
+    expect(quote.customizedSubtotal).toBe(173);
+  });
+
+  it("rejects build-from-scratch if no meal items or additions were chosen", () => {
+    const scratchConfig = MenuModel.normalizeMenuConfig({
+      ...config,
+      customPricingConfig: { ...config.customPricingConfig, basePrice: 0 }
+    });
+
+    expect(() => MenuModel.quoteCustomPlan({
+      basePlan: "scratch",
+      selections: { roti: 0, sabji: 0, dal: 0, rice: 0 }
+    }, scratchConfig)).toThrow("Please select at least one meal item to build your plan");
+  });
 });
