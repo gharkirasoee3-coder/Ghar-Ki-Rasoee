@@ -352,7 +352,7 @@ class MenuModel {
     for (const key of Object.keys(categories)) {
       const cat = categories[key];
       const catCities = (cat && Array.isArray(cat.cities)) ? cat.cities : [];
-      if (catCities.some(c => c && c.trim().toLowerCase() === normalizedCity)) {
+      if (catCities.some(c => c && this.normalizeCityName(c) === this.normalizeCityName(normalizedCity))) {
         return key;
       }
       // Handle unit test mocks where cities array was omitted but category name matches
@@ -370,6 +370,15 @@ class MenuModel {
     }
 
     return null;
+  }
+
+  static normalizeCityName(name) {
+    if (!name || typeof name !== "string") return "";
+    const cleaned = name.toLowerCase().trim();
+    if (cleaned === "new westminister" || cleaned === "new westminster") {
+      return "new westminster";
+    }
+    return cleaned;
   }
 
   /**
@@ -401,12 +410,18 @@ class MenuModel {
     candidateCities.sort((a, b) => b.city.length - a.city.length);
 
     for (const candidate of candidateCities) {
-      const normCity = candidate.city.toLowerCase();
-      // Match using word boundary delimiters
-      const escaped = normCity.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
-      if (regex.test(normalizedAddress)) {
-        return candidate;
+      const normCity = this.normalizeCityName(candidate.city);
+      const variants = [normCity];
+      if (normCity === "new westminster") {
+        variants.push("new westminister");
+      }
+      for (const v of variants) {
+        // Match using word boundary delimiters
+        const escaped = v.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
+        if (regex.test(normalizedAddress)) {
+          return candidate;
+        }
       }
     }
 
@@ -609,8 +624,14 @@ class MenuModel {
     };
     for (const item of ["roti", "sabji", "dal", "rice"]) {
       selected[item] = Number(selected[item]);
-      if (!Number.isInteger(selected[item]) || selected[item] < 0 || selected[item] > 50) {
-        throw new Error(`${item} must be a whole number between 0 and 50`);
+      if (item === "roti") {
+        if (!Number.isInteger(selected[item]) || selected[item] < 0) {
+          throw new Error("roti must be a non-negative whole number");
+        }
+      } else {
+        if (!Number.isInteger(selected[item]) || selected[item] < 0 || selected[item] > 50) {
+          throw new Error(`${item} must be a whole number between 0 and 50`);
+        }
       }
     }
     if (typeof selected.saturdaySpecial !== "boolean") throw new Error("saturdaySpecial must be true or false");

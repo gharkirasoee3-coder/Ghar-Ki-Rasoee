@@ -55,10 +55,14 @@ export const DEFAULT_BC_CENTER: [number, number] = [49.2827, -123.1207]; // Vanc
  */
 export function normalizeCityName(name: string): string {
   if (!name) return "";
-  return name
+  const cleaned = name
     .toLowerCase()
     .replace(/\b(city of|township of|district of|town of|municipality of|village of)\b/gi, "")
     .trim();
+  if (cleaned === "new westminister" || cleaned === "new westminster") {
+    return "new westminster";
+  }
+  return cleaned;
 }
 
 /**
@@ -148,18 +152,24 @@ export function matchAddressToAdminCities(
 
   for (const cand of candidateList) {
     const normCity = normalizeCityName(cand.city);
-    const escaped = normCity.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-    const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
-    if (regex.test(normalizedAddress)) {
-      return {
-        eligible: true,
-        city: cand.city,
-        categoryKey: cand.categoryKey,
-        categoryName: cand.categoryName,
-        outOfProvince: false,
-        provinceName: state || "British Columbia",
-        error: null
-      };
+    const variants = [normCity];
+    if (normCity === "new westminster") {
+      variants.push("new westminister");
+    }
+    for (const v of variants) {
+      const escaped = v.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+      const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+      if (regex.test(normalizedAddress)) {
+        return {
+          eligible: true,
+          city: cand.city,
+          categoryKey: cand.categoryKey,
+          categoryName: cand.categoryName,
+          outOfProvince: false,
+          provinceName: state || "British Columbia",
+          error: null
+        };
+      }
     }
   }
 

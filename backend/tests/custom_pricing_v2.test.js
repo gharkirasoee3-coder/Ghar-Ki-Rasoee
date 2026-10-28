@@ -107,6 +107,24 @@ describe("custom subscription pricing v2", () => {
     expect(quote.customizedSubtotal).toBe(173);
   });
 
+  it("supports large / infinite roti orders in build-from-scratch", () => {
+    const scratchConfig = MenuModel.normalizeMenuConfig({
+      ...config,
+      customPricingConfig: { ...config.customPricingConfig, basePrice: 0 }
+    });
+
+    const quote = MenuModel.quoteCustomPlan({
+      basePlan: "scratch",
+      selections: { roti: 150, sabji: 0, dal: 0, rice: 0 }
+    }, scratchConfig);
+
+    expect(quote.basePlan).toBe("scratch");
+    expect(quote.selectedComponents.roti).toBe(150);
+    // 150 Roti * $8 addition rate = $1200
+    expect(quote.additionTotal).toBe(1200);
+    expect(quote.customizedSubtotal).toBe(1200);
+  });
+
   it("rejects build-from-scratch if no meal items or additions were chosen", () => {
     const scratchConfig = MenuModel.normalizeMenuConfig({
       ...config,
